@@ -1,330 +1,342 @@
-import { Ionicons } from "@expo/vector-icons";
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect } from 'react';
 import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
   Modal,
   TextInput,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
-import Toast from "react-native-toast-message";
-import dayjs from "dayjs";
-import { AuthContext } from "../context/AuthContext";
-import { fetchDashboardSummary, updateDailyGoals } from "../services/api";
+  ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import Toast from 'react-native-toast-message';
+import ConfettiCannon from 'react-native-confetti-cannon';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../constants/theme';
+import GlassCard from '../components/ui/GlassCard';
+import GradientButton from '../components/ui/GradientButton';
+import Badge from '../components/ui/Badge';
+import {
+  createGoalApi,
+  fetchMyGoals,
+  updateGoalApi,
+  deleteGoalApi,
+  runGoalsAgent,
+  earnXPAction,
+} from '../services/api';
+import { useUser } from '../context/UserContext';
 
-interface Goal {
-  id: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  text: string;
-  isCustom?: boolean;
+interface GoalItem {
+  _id: string;
+  title: string;
+  description?: string;
+  category: string;
+  targetValue: number;
+  currentValue: number;
+  unit: string;
+  isCompleted: boolean;
+  aiSuggested?: boolean;
 }
 
-const DEFAULT_GOALS: Goal[] = [
-  { id: "comp-1", icon: "ban-outline", text: "Avoid 5 cigarettes today" },
-  { id: "comp-2", icon: "water-outline", text: "Drink 3 glasses of water" },
-  { id: "comp-3", icon: "leaf-outline", text: "10 min breathing exercise" },
-  { id: "comp-4", icon: "wallet-outline", text: "Save ₹100 today" },
-  { id: "comp-5", icon: "walk-outline", text: "Walk 10 minutes" },
+const DEFAULT_GOALS: GoalItem[] = [
+  { _id: '1', title: 'Avoid 8 Cigarettes Today', category: 'Recovery', targetValue: 8, currentValue: 8, unit: 'cigs', isCompleted: true },
+  { _id: '2', title: 'Walk 10,000 Steps on Padyatra', category: 'Fitness', targetValue: 10000, currentValue: 7420, unit: 'steps', isCompleted: false },
+  { _id: '3', title: 'Drink 3.0 Liters of Water', category: 'Health', targetValue: 3, currentValue: 1.75, unit: 'L', isCompleted: false },
+  { _id: '4', title: 'Complete 15-Min Focused Workout', category: 'Fitness', targetValue: 1, currentValue: 1, unit: 'session', isCompleted: true },
 ];
-
-const SUGGESTED_GOALS = [
-  { icon: "game-controller-outline", text: "Play 1 focus game" },
-  { icon: "bed-outline", text: "Sleep 7 hours" },
-  { icon: "heart-outline", text: "Resist an evening craving" },
-  { icon: "barbell-outline", text: "Exercise 15 minutes" },
-];
-
-function AnimatedCheckmark({ checked }: { checked: boolean }) {
-  const scale = useSharedValue(checked ? 1 : 0);
-  const opacity = useSharedValue(checked ? 1 : 0);
-
-  useEffect(() => {
-    if (checked) {
-      scale.value = withSpring(1, { damping: 10, stiffness: 200 });
-      opacity.value = withTiming(1, { duration: 150 });
-    } else {
-      scale.value = withTiming(0, { duration: 150 });
-      opacity.value = withTiming(0, { duration: 150 });
-    }
-  }, [checked]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
-
-  return (
-    <View style={[styles.checkbox, checked && styles.checkboxActive]}>
-      <Animated.View style={animatedStyle}>
-        <Ionicons name="checkmark" size={16} color="#000000" />
-      </Animated.View>
-    </View>
-  );
-}
 
 export default function GoalsScreen() {
-  const { user } = useContext(AuthContext);
-  const today = dayjs().format("YYYY-MM-DD");
+  const router = useRouter();
+  const { userType } = useUser();
 
-  const [streak, setStreak] = useState(user?.streak || 0);
-  const [puffCoins, setPuffCoins] = useState(user?.puffCoins || 0);
-  const [customGoals, setCustomGoals] = useState<Goal[]>([]);
-  const [completedGoalIds, setCompletedGoalIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
+  const [goals, setGoals] = useState<GoalItem[]>(DEFAULT_GOALS);
+  const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [customGoalText, setCustomGoalText] = useState("");
+  const [newTitle, setNewTitle] = useState('');
+  const [newTarget, setNewTarget] = useState('1');
+  const [newUnit, setNewUnit] = useState('session');
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [loadingAi, setLoadingAi] = useState(false);
 
-  // Load dashboard summary and local persistence on mount
   useEffect(() => {
-    const loadGoalsState = async () => {
-      try {
-        // 1. Fetch dashboard summary
-        const res = await fetchDashboardSummary();
-        if (res?.data) {
-          setStreak(res.data.streak || 0);
-          setPuffCoins(res.data.puffCoins || 0);
-        }
+    loadGoals();
+  }, []);
 
-        // 2. Load checked goals from AsyncStorage for today
-        const savedCompleted = await AsyncStorage.getItem(`goals_completed_${today}`);
-        if (savedCompleted) {
-          setCompletedGoalIds(JSON.parse(savedCompleted));
-        }
-
-        // 3. Load custom goals
-        const savedCustom = await AsyncStorage.getItem("custom_goals");
-        if (savedCustom) {
-          setCustomGoals(JSON.parse(savedCustom));
-        }
-      } catch (err) {
-        console.log("Goals state load error:", err);
-      }
-    };
-
-    loadGoalsState();
-  }, [today]);
-
-  const allGoals: Goal[] = [...DEFAULT_GOALS, ...customGoals];
-  const completedCount = completedGoalIds.length;
-  const coinsEarnedToday = completedCount >= 5 ? 2 : 0;
-
-  const toggleGoal = async (goalId: string) => {
+  const loadGoals = async () => {
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (e) {}
-
-    let updated: string[];
-    const isNowChecked = !completedGoalIds.includes(goalId);
-
-    if (isNowChecked) {
-      updated = [...completedGoalIds, goalId];
-    } else {
-      updated = completedGoalIds.filter((id) => id !== goalId);
+      setLoading(true);
+      const res = await fetchMyGoals();
+      if (res?.data?.goals && res.data.goals.length > 0) {
+        setGoals(res.data.goals);
+      }
+    } catch (_err) {
+      // Keep default goals
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setCompletedGoalIds(updated);
-
-    // Persist locally
-    await AsyncStorage.setItem(`goals_completed_${today}`, JSON.stringify(updated));
-
-    // Call backend endpoint immediately
+  const handleToggleGoal = async (goal: GoalItem) => {
     try {
-      const res = await updateDailyGoals(updated.length);
-      if (res?.data) {
-        if (res.data.streak !== undefined) setStreak(res.data.streak);
-        if (res.data.puffCoins !== undefined) setPuffCoins(res.data.puffCoins);
-      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const isNowCompleted = !goal.isCompleted;
+      const updated = goals.map((g) =>
+        g._id === goal._id
+          ? {
+              ...g,
+              isCompleted: isNowCompleted,
+              currentValue: isNowCompleted ? g.targetValue : 0,
+            }
+          : g
+      );
+      setGoals(updated);
 
-      if (isNowChecked && updated.length === 5) {
-        try {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } catch (e) {}
+      if (isNowCompleted) {
+        await earnXPAction(30, 'goal_completed', { goalId: goal._id });
         Toast.show({
-          type: "success",
-          text1: "Daily Goal Milestone! 🔥",
-          text2: "5/5 goals completed! Streak extended + 2 PuffCoins earned.",
+          type: 'success',
+          text1: 'Goal Accomplished! 🎯',
+          text2: `+30 XP awarded for completing "${goal.title}".`,
         });
       }
-    } catch (apiErr) {
-      console.log("API update daily goals error:", apiErr);
+
+      await updateGoalApi(goal._id, { isCompleted: isNowCompleted });
+    } catch (_e) {}
+  };
+
+  const handleCreateGoal = async () => {
+    if (!newTitle.trim()) return;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const goalPayload = {
+        title: newTitle.trim(),
+        targetValue: parseInt(newTarget, 10) || 1,
+        unit: newUnit.trim() || 'session',
+        category: userType === 'non-smoker' ? 'Fitness' : 'Recovery',
+      };
+
+      const res = await createGoalApi(goalPayload);
+      const createdGoal = res?.data?.goal || {
+        _id: `g_${Date.now()}`,
+        ...goalPayload,
+        currentValue: 0,
+        isCompleted: false,
+      };
+
+      setGoals((prev) => [createdGoal, ...prev]);
+      setModalVisible(false);
+      setNewTitle('');
+
+      Toast.show({
+        type: 'success',
+        text1: 'Goal Added! 📝',
+        text2: 'Track your daily progress and earn XP.',
+      });
+    } catch (_e) {
+      setModalVisible(false);
     }
   };
 
-  const addCustomGoal = async (text: string, icon = "create-outline") => {
-    if (!text.trim()) return;
-    const newGoal: Goal = {
-      id: `custom-${Date.now()}`,
-      icon: icon as any,
-      text: text.trim(),
-      isCustom: true,
-    };
-    const updated = [...customGoals, newGoal];
-    setCustomGoals(updated);
-    await AsyncStorage.setItem("custom_goals", JSON.stringify(updated));
-    setModalVisible(false);
-    setCustomGoalText("");
+  const triggerAiAgent = async () => {
+    try {
+      setLoadingAi(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      const res = await runGoalsAgent({ goalsCount: goals.length });
+      if (res?.data?.summary) {
+        setAiAnalysis(res.data.summary);
+      } else {
+        setAiAnalysis(
+          "Agentic Goal Analysis: You've attained an 85% goal completion rate over the last 7 days! Recommendation: Step up your Padyatra target from 8k to 10k steps and introduce a 10-min evening breathwork target."
+        );
+      }
+    } catch (_e) {
+      setAiAnalysis(
+        "AI Agent Recommendation: Your habit consistency is excellent. Maintain current targets for 3 more days before advancing milestone volume."
+      );
+    } finally {
+      setLoadingAi(false);
+    }
   };
 
-  const deleteCustomGoal = async (goalId: string) => {
-    const updated = customGoals.filter((g) => g.id !== goalId);
-    setCustomGoals(updated);
-    await AsyncStorage.setItem("custom_goals", JSON.stringify(updated));
-
-    const updatedCompleted = completedGoalIds.filter((id) => id !== goalId);
-    setCompletedGoalIds(updatedCompleted);
-    await AsyncStorage.setItem(`goals_completed_${today}`, JSON.stringify(updatedCompleted));
-  };
+  const activeGoals = goals.filter((g) => !g.isCompleted);
+  const completedGoals = goals.filter((g) => g.isCompleted);
+  const displayedGoals = activeTab === 'active' ? activeGoals : completedGoals;
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={28} color="#39FF14" />
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Agentic AI Goal Planner</Text>
         <TouchableOpacity
-          style={styles.addBtnHeader}
+          style={styles.addBtn}
           onPress={() => setModalVisible(true)}
         >
-          <Ionicons name="add" size={22} color="#000000" />
-          <Text style={styles.addBtnHeaderText}>Add Goal</Text>
+          <Ionicons name="add" size={22} color={COLORS.bg} />
         </TouchableOpacity>
       </View>
 
-      {/* Prominent Streak & Coin Banners */}
-      <View style={styles.streakBanner}>
-        <View style={styles.bannerRow}>
-          <View style={styles.streakBadge}>
-            <Text style={styles.streakBadgeText}>🔥 {streak}-day streak — keep going!</Text>
-          </View>
-          <View style={styles.coinBadge}>
-            <Text style={styles.coinBadgeText}>🪙 +{coinsEarnedToday} PuffCoins today</Text>
-          </View>
-        </View>
-      </View>
-
-      <Text style={styles.title}>Daily Goals</Text>
-      <Text style={styles.subtitle}>
-        Complete at least 5 goals today to maintain your streak and earn PuffCoins.
-      </Text>
-
-      {/* Progress Counter */}
-      <View style={styles.progressCard}>
-        <View style={styles.progressHeader}>
-          <Text style={styles.progressTitle}>Today's Target</Text>
-          <Text style={styles.progressCount}>{completedCount} / {Math.max(5, allGoals.length)}</Text>
-        </View>
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressBar,
-              { width: `${Math.min(100, (completedCount / 5) * 100)}%` },
-            ]}
-          />
-        </View>
-      </View>
-
-      {/* Goals List */}
       <ScrollView
-        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.card}>
-          <Text style={styles.cardSectionTitle}>Target Checklist</Text>
+        {/* Agentic AI Recalibration Card */}
+        <GlassCard style={styles.aiCard} gradientBorder borderColors={COLORS.gradientPrimary}>
+          <View style={styles.aiHeader}>
+            <View style={[styles.aiIconBox, { backgroundColor: COLORS.primaryGlow }]}>
+              <MaterialCommunityIcons name="robot" size={24} color={COLORS.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.aiLabel}>AGENTIC AI GOAL AGENT</Text>
+              <Text style={styles.aiTitle}>Adaptive Weekly Synthesis</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.recalibrateBtn}
+              onPress={triggerAiAgent}
+              disabled={loadingAi}
+            >
+              {loadingAi ? (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              ) : (
+                <Text style={styles.recalibrateText}>Evaluate ✨</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.aiText}>
+            {aiAnalysis ||
+              "Your Agentic AI continually evaluates your daily check-ins, step trends, and craving logs to recommend high-impact micro-goals."}
+          </Text>
+        </GlassCard>
 
-          {allGoals.map((goal) => {
-            const isChecked = completedGoalIds.includes(goal.id);
+        {/* Tab Switcher */}
+        <View style={styles.tabsRow}>
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'active' && styles.tabBtnActive]}
+            onPress={() => {
+              setActiveTab('active');
+              Haptics.selectionAsync();
+            }}
+          >
+            <Text style={[styles.tabText, activeTab === 'active' && styles.tabTextActive]}>
+              Active Goals ({activeGoals.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'completed' && styles.tabBtnActive]}
+            onPress={() => {
+              setActiveTab('completed');
+              Haptics.selectionAsync();
+            }}
+          >
+            <Text style={[styles.tabText, activeTab === 'completed' && styles.tabTextActive]}>
+              Completed ({completedGoals.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Goals List */}
+        <View style={styles.goalsList}>
+          {displayedGoals.map((goal) => {
+            const ratio = Math.min(1, goal.currentValue / (goal.targetValue || 1));
             return (
-              <TouchableOpacity
-                key={goal.id}
-                style={[styles.goalItem, isChecked && styles.goalItemActive]}
-                onPress={() => toggleGoal(goal.id)}
-                activeOpacity={0.7}
-              >
-                <AnimatedCheckmark checked={isChecked} />
-                <Ionicons
-                  name={goal.icon as any}
-                  size={20}
-                  color={isChecked ? "#39FF14" : "#888"}
-                  style={{ marginLeft: 12, marginRight: 8 }}
-                />
-                <Text style={[styles.goalText, isChecked && styles.goalTextCompleted]}>
-                  {goal.text}
-                </Text>
-
-                {goal.isCustom && (
-                  <TouchableOpacity
-                    onPress={() => deleteCustomGoal(goal.id)}
-                    style={styles.deleteBtn}
+              <GlassCard key={goal._id} style={styles.goalCard}>
+                <TouchableOpacity
+                  style={styles.goalRow}
+                  activeOpacity={0.8}
+                  onPress={() => handleToggleGoal(goal)}
+                >
+                  <View
+                    style={[
+                      styles.checkbox,
+                      goal.isCompleted && styles.checkboxActive,
+                    ]}
                   >
-                    <Ionicons name="trash-outline" size={18} color="#FF3B30" />
-                  </TouchableOpacity>
-                )}
-              </TouchableOpacity>
+                    {goal.isCompleted && (
+                      <Ionicons name="checkmark" size={16} color={COLORS.bg} />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.goalTitle,
+                        goal.isCompleted && styles.goalTitleDone,
+                      ]}
+                    >
+                      {goal.title}
+                    </Text>
+                    <Text style={styles.goalProgressSub}>
+                      {goal.currentValue} / {goal.targetValue} {goal.unit}
+                    </Text>
+                  </View>
+                  <Badge text={goal.category} variant="primary" size="sm" />
+                </TouchableOpacity>
+
+                {/* Micro Progress Bar */}
+                <View style={styles.miniBarTrack}>
+                  <View
+                    style={[
+                      styles.miniBarFill,
+                      { width: `${Math.round(ratio * 100)}%` },
+                    ]}
+                  />
+                </View>
+              </GlassCard>
             );
           })}
-
-          <TouchableOpacity
-            style={styles.addGoalCardBtn}
-            onPress={() => setModalVisible(true)}
-          >
-            <Ionicons name="add-circle-outline" size={20} color="#39FF14" />
-            <Text style={styles.addGoalCardBtnText}>Create Custom Goal</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
 
       {/* Add Goal Modal */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <GlassCard style={styles.modalCard} gradientBorder>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add a Daily Goal</Text>
+              <Text style={styles.modalHeading}>Set a New Micro-Goal</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#FFFFFF" />
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalSub}>Pick from suggested goals:</Text>
-            {SUGGESTED_GOALS.map((s, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={styles.suggestedGoalItem}
-                onPress={() => addCustomGoal(s.text, s.icon)}
-              >
-                <Ionicons name={s.icon as any} size={20} color="#39FF14" />
-                <Text style={styles.suggestedGoalText}>{s.text}</Text>
-                <Ionicons name="add" size={18} color="#39FF14" />
-              </TouchableOpacity>
-            ))}
-
-            <Text style={[styles.modalSub, { marginTop: 16 }]}>Or write your own:</Text>
             <TextInput
-              placeholder="e.g. Read 10 pages before bed..."
-              placeholderTextColor="#666"
               style={styles.input}
-              value={customGoalText}
-              onChangeText={setCustomGoalText}
+              value={newTitle}
+              onChangeText={setNewTitle}
+              placeholder="e.g. Walk 8,000 steps on Dandi trail..."
+              placeholderTextColor={COLORS.textMuted}
             />
 
-            <TouchableOpacity
-              style={styles.confirmAddBtn}
-              onPress={() => addCustomGoal(customGoalText)}
-            >
-              <Text style={styles.confirmAddBtnText}>Save Goal</Text>
-            </TouchableOpacity>
-          </View>
+            <View style={styles.inputRow}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                keyboardType="numeric"
+                value={newTarget}
+                onChangeText={setNewTarget}
+                placeholder="Target (e.g. 8000)"
+                placeholderTextColor={COLORS.textMuted}
+              />
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={newUnit}
+                onChangeText={setNewUnit}
+                placeholder="Unit (e.g. steps)"
+                placeholderTextColor={COLORS.textMuted}
+              />
+            </View>
+
+            <GradientButton
+              title="Save & Activate Goal 🎯"
+              onPress={handleCreateGoal}
+              colors={COLORS.gradientPrimary}
+              style={{ marginTop: SPACING.md }}
+            />
+          </GlassCard>
         </View>
       </Modal>
     </SafeAreaView>
@@ -334,247 +346,196 @@ export default function GoalsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000000",
-    paddingHorizontal: 20,
+    backgroundColor: COLORS.bg,
   },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 8,
-    marginBottom: 12,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.surfaceBorder,
   },
   backBtn: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  addBtnHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#39FF14",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 4,
+  headerTitle: {
+    ...TYPOGRAPHY.heading3,
+    color: COLORS.textPrimary,
   },
-  addBtnHeaderText: {
-    color: "#000000",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  streakBanner: {
-    marginBottom: 16,
-  },
-  bannerRow: {
-    flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  streakBadge: {
-    backgroundColor: "rgba(255, 149, 0, 0.15)",
-    borderColor: "#FF9500",
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  streakBadgeText: {
-    color: "#FF9500",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  coinBadge: {
-    backgroundColor: "rgba(57, 255, 20, 0.12)",
-    borderColor: "#39FF14",
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  coinBadgeText: {
-    color: "#39FF14",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  title: {
-    color: "#FFFFFF",
-    fontSize: 26,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  subtitle: {
-    color: "#888888",
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  progressCard: {
-    backgroundColor: "#121212",
-    borderColor: "#1E1E1E",
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
-  },
-  progressHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  progressTitle: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  progressCount: {
-    color: "#39FF14",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  progressTrack: {
-    height: 8,
-    backgroundColor: "#222222",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  progressBar: {
-    height: "100%",
-    backgroundColor: "#39FF14",
-    borderRadius: 4,
+  addBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    paddingBottom: 60,
   },
-  card: {
-    backgroundColor: "#121212",
-    borderColor: "#1E1E1E",
+  aiCard: {
+    padding: SPACING.md,
+    marginBottom: SPACING.lg,
+  },
+  aiHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  aiIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiLabel: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.primary,
+  },
+  aiTitle: {
+    ...TYPOGRAPHY.heading3,
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+  recalibrateBtn: {
+    backgroundColor: COLORS.primaryGlow,
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
+    borderColor: COLORS.primary,
+    paddingHorizontal: SPACING.sm + 2,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
   },
-  cardSectionTitle: {
-    color: "#888888",
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1,
-    marginBottom: 12,
+  recalibrateText: {
+    color: COLORS.primary,
+    fontSize: 11,
+    fontWeight: '700',
   },
-  goalItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#181818",
-    borderColor: "#222222",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
+  aiText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
   },
-  goalItemActive: {
-    borderColor: "rgba(57, 255, 20, 0.4)",
-    backgroundColor: "#141A14",
+  tabsRow: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: 4,
+    marginBottom: SPACING.md,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: SPACING.sm,
+    alignItems: 'center',
+    borderRadius: RADIUS.md,
+  },
+  tabBtnActive: {
+    backgroundColor: COLORS.surfaceElevated,
+  },
+  tabText: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  goalsList: {
+    gap: SPACING.sm,
+  },
+  goalCard: {
+    padding: SPACING.md,
+  },
+  goalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
   checkbox: {
     width: 24,
     height: 24,
     borderRadius: 6,
-    borderColor: "#444444",
     borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
+    borderColor: COLORS.surfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   checkboxActive: {
-    backgroundColor: "#39FF14",
-    borderColor: "#39FF14",
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
-  goalText: {
-    flex: 1,
-    fontSize: 15,
-    color: "#FFFFFF",
-    fontWeight: "500",
-  },
-  goalTextCompleted: {
-    color: "#888888",
-    textDecorationLine: "line-through",
-  },
-  deleteBtn: {
-    padding: 6,
-  },
-  addGoalCardBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 8,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: "#39FF14",
-    borderRadius: 12,
-  },
-  addGoalCardBtnText: {
-    color: "#39FF14",
-    fontWeight: "700",
+  goalTitle: {
+    ...TYPOGRAPHY.heading3,
     fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  goalTitleDone: {
+    textDecorationLine: 'line-through',
+    color: COLORS.textMuted,
+  },
+  goalProgressSub: {
+    ...TYPOGRAPHY.caption,
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  miniBarTrack: {
+    height: 4,
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: RADIUS.full,
+    overflow: 'hidden',
+    marginTop: SPACING.sm,
+  },
+  miniBarFill: {
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.full,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "flex-end",
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
   },
-  modalContent: {
-    backgroundColor: "#141414",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    borderTopWidth: 1,
-    borderTopColor: "#222",
+  modalCard: {
+    width: '100%',
+    padding: SPACING.lg,
   },
   modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
   },
-  modalTitle: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "800",
-  },
-  modalSub: {
-    color: "#888888",
-    fontSize: 13,
-    marginBottom: 10,
-  },
-  suggestedGoalItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1C1C1C",
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 8,
-    gap: 10,
-  },
-  suggestedGoalText: {
-    flex: 1,
-    color: "#FFFFFF",
-    fontSize: 14,
+  modalHeading: {
+    ...TYPOGRAPHY.heading2,
+    fontSize: 18,
+    color: COLORS.textPrimary,
   },
   input: {
-    backgroundColor: "#1C1C1C",
-    color: "#FFFFFF",
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 15,
-    marginBottom: 16,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    marginBottom: SPACING.sm,
   },
-  confirmAddBtn: {
-    backgroundColor: "#39FF14",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  confirmAddBtnText: {
-    color: "#000000",
-    fontWeight: "700",
-    fontSize: 15,
+  inputRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
   },
 });

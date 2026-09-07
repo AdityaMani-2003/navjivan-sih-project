@@ -1,377 +1,174 @@
-<div align="center">
+# 🌿 Navjivan × LastPuff
 
-# 🏆 LastPuff — SIH 2025 Winner
+> **Smart India Hackathon 2025** — Production-Grade AI-Powered Dual-Profile Health, Smoking Cessation & Athletic Vitality Platform.
 
-### *AI-Powered Wellness & Habit Transformation Platform*
-
-[![Smart India Hackathon](https://img.shields.io/badge/🏆_SIH_2025-National_Winner-gold?style=for-the-badge&labelColor=1a1a2e)](https://www.sih.gov.in/)
-[![React Native](https://img.shields.io/badge/React_Native-0.81-61DAFB?style=for-the-badge&logo=react&logoColor=white)](https://reactnative.dev/)
-[![Expo](https://img.shields.io/badge/Expo-54-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
-[![Node.js](https://img.shields.io/badge/Node.js-Express-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-77.8%25-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-
-<br/>
-
-> **LastPuff** is an award-winning, AI-driven wellness companion that helps users break unhealthy habits and build sustainable, healthier lifestyles — recognized at India's premier national innovation challenge.
-
-<br/>
+[![React Native](https://img.shields.io/badge/React%20Native-0.86.3-61DAFB?logo=react&logoColor=black)](https://reactnative.dev/)
+[![Expo SDK](https://img.shields.io/badge/Expo%20SDK-57-000020?logo=expo&logoColor=white)](https://expo.dev/)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Express.js](https://img.shields.io/badge/Express.js-Backend-000000?logo=express&logoColor=white)](https://expressjs.com/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Database-47A248?logo=mongodb&logoColor=white)](https://mongodb.com/)
+[![Google Gemini](https://img.shields.io/badge/GenAI-Gemini%203.6%20Flash-4285F4?logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
 ---
 
-</div>
+## 🌟 Executive Summary
 
-## 📋 Table of Contents
+**Navjivan × LastPuff** is an enterprise-grade, dual-profile wellness ecosystem tailored for the Indian demographic. It addresses two critical health frontiers:
 
-- [🏅 About the Achievement](#-about-the-achievement)
-- [✨ Key Features](#-key-features)
-- [🏗️ System Architecture](#️-system-architecture)
-- [🛠️ Tech Stack](#️-tech-stack)
-- [📁 Project Structure](#-project-structure)
-- [⚡ Getting Started](#-getting-started)
-- [🔌 API Endpoints](#-api-endpoints)
-- [👥 Team](#-team)
-- [📄 License](#-license)
+1. **🚭 LastPuff (Smoker Profile)**: Evidence-based smoking cessation, live second-by-second smoke-free recovery ticker, 24/7 craving emergency SOS tools, 4-7-8 pranayama breathing pacer, 30-day stepdown protocol, disease risk radar, and crowd-sourced geofenced smoking danger zones.
+2. **⚡ Navjivan (Fitness & Wellness Profile)**: AI-periodized athletic conditioning (*Cricket, Running, Badminton, Kabaddi, Football*), **Padyatra** virtual Indian heritage pilgrimage step tracking (*Dandi March, Char Dham, Everest Trail*), Gemini Vision camera meal macro analyzer, and cognitive focus scripts.
+3. **🇮🇳 Swadeshi Gamification & SaaS**: 5-tier level progression system with redeemable vouchers for Indian wellness brands (*MuscleBlaze, The Whole Truth, Cult.fit, Khadi India, boAt Lifestyle*), and a 3-tier subscription paywall.
 
 ---
 
-## 🏅 About the Achievement
+## 📱 Dual-Profile Architecture
 
-<table>
-<tr>
-<td width="60">🏆</td>
-<td><strong>Smart India Hackathon (SIH) 2025 — National Winner</strong></td>
-</tr>
-<tr>
-<td>🇮🇳</td>
-<td>Organized by the <strong>Government of India</strong> — India's largest open innovation platform</td>
-</tr>
-<tr>
-<td>🎯</td>
-<td>Selected from <strong>thousands of competing teams nationwide</strong> for innovation, scalability & real-world impact</td>
-</tr>
-<tr>
-<td>🌍</td>
-<td>Domain: <strong>Public Health & Wellness</strong> — Preventive healthcare & sustainable habit change</td>
-</tr>
-</table>
-
-LastPuff began as a smoking-cessation solution and evolved into a **comprehensive health and fitness companion**. The platform stood out for its practical approach to **preventive healthcare**, combining AI-driven personalization with community support and real-time geofencing technology.
-
----
-
-## ✨ Key Features
-
-<table>
-<tr>
-<td align="center" width="25%">
-<h3>🤖</h3>
-<strong>Agentic AI Engine</strong>
-<br/><sub>Personalized recommendations that adapt to individual user behavior using GenAI-powered insights</sub>
-</td>
-<td align="center" width="25%">
-<h3>📊</h3>
-<strong>Smart Dashboard</strong>
-<br/><sub>Real-time analytics with streak tracking, health score metrics, and savings calculator</sub>
-</td>
-<td align="center" width="25%">
-<h3>📍</h3>
-<strong>Geofencing Alerts</strong>
-<br/><sub>Location-aware notifications using expo-location & expo-task-manager for trigger zone avoidance</sub>
-</td>
-<td align="center" width="25%">
-<h3>🆘</h3>
-<strong>SOS Mode</strong>
-<br/><sub>Instant craving intervention with guided breathing exercises and emergency coping strategies</sub>
-</td>
-</tr>
-<tr>
-<td align="center" width="25%">
-<h3>🏋️</h3>
-<strong>Fitness Plans</strong>
-<br/><sub>Structured workout routines and wellness goals tailored to the user's recovery stage</sub>
-</td>
-<td align="center" width="25%">
-<h3>👥</h3>
-<strong>Community Hub</strong>
-<br/><sub>Social feed with posts, comments, likes, and image sharing via Cloudinary integration</sub>
-</td>
-<td align="center" width="25%">
-<h3>🔐</h3>
-<strong>Secure Auth</strong>
-<br/><sub>JWT-based authentication with bcrypt password hashing and protected API routes</sub>
-</td>
-<td align="center" width="25%">
-<h3>📱</h3>
-<strong>Cross-Platform</strong>
-<br/><sub>Native Android & iOS experience built with React Native + Expo with haptic feedback</sub>
-</td>
-</tr>
-</table>
-
----
-
-## 🏗️ System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      LASTPUFF ARCHITECTURE                      │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   ┌─────────────────────────────────────────────────────────┐   │
-│   │              📱 MOBILE APP (React Native + Expo)         │   │
-│   │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐  │   │
-│   │  │Dashboard │ │Geofencing│ │Community │ │  Profile   │  │   │
-│   │  │& Stats   │ │& Maps    │ │& Social  │ │  & Auth    │  │   │
-│   │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘  │   │
-│   │       │             │            │             │         │   │
-│   │  ┌────┴─────────────┴────────────┴─────────────┴─────┐  │   │
-│   │  │           Services Layer (Axios + API)             │  │   │
-│   │  └───────────────────────┬───────────────────────────┘  │   │
-│   └──────────────────────────┼──────────────────────────────┘   │
-│                              │ HTTPS                            │
-│   ┌──────────────────────────┼──────────────────────────────┐   │
-│   │              🖥️ BACKEND (Node.js + Express)              │   │
-│   │  ┌───────────────────────┴───────────────────────────┐  │   │
-│   │  │              REST API Gateway                      │  │   │
-│   │  └───────────────────────┬───────────────────────────┘  │   │
-│   │       ┌──────────────────┼──────────────────┐           │   │
-│   │  ┌────┴────┐  ┌─────────┴───────┐  ┌───────┴────────┐  │   │
-│   │  │  Auth   │  │   Dashboard     │  │    Posts &      │  │   │
-│   │  │ Routes  │  │   Controller    │  │    Comments     │  │   │
-│   │  └────┬────┘  └─────────┬───────┘  └───────┬────────┘  │   │
-│   │       │                 │                   │           │   │
-│   │  ┌────┴─────────────────┴───────────────────┴────────┐  │   │
-│   │  │     Middleware (JWT Auth + Multer Uploads)         │  │   │
-│   │  └───────────────────────┬───────────────────────────┘  │   │
-│   └──────────────────────────┼──────────────────────────────┘   │
-│                              │                                  │
-│   ┌──────────────────────────┼──────────────────────────────┐   │
-│   │              💾 DATA & STORAGE LAYER                     │   │
-│   │  ┌──────────────┐  ┌─────────────┐  ┌───────────────┐  │   │
-│   │  │   MongoDB    │  │ Cloudinary  │  │ AsyncStorage  │  │   │
-│   │  │  (Mongoose)  │  │  (Media)    │  │   (Local)     │  │   │
-│   │  └──────────────┘  └─────────────┘  └───────────────┘  │   │
-│   └─────────────────────────────────────────────────────────┘   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    A[User Launch / Splash] --> B{Onboarding: Choose Path}
+    B -->|Smoker Profile| C[LastPuff Quit-Smoking Hub]
+    B -->|Non-Smoker Profile| D[Navjivan Fitness & Padyatra Hub]
+    
+    C --> C1[24/7 Red SOS Emergency + 4-7-8 Breathing]
+    C --> C2[Live Seconds & Rupee Ticker Engine]
+    C --> C3[30-Day Stepdown Protocol Generator]
+    C --> C4[AI Organ Disease Prognosis Radar]
+    C --> C5[Smoking Hotspot Geofencing Radar]
+    
+    D --> D1[Padyatra Heritage Pilgrimage Trail]
+    D --> D2[Concentric Apple Fitness Style Rings]
+    D --> D3[AI Vision & 1-Tap Indian Meal Logger]
+    D --> D4[Athlete Sport Periodization Lab]
+    D --> D5[Mental Fitness & Focus Scripts]
+    
+    C1 --> E[Shared Gamification: Swadeshi Store + Tribe Community + Gemini Copilot]
+    C2 --> E
+    C3 --> E
+    C4 --> E
+    C5 --> E
+    D1 --> E
+    D2 --> E
+    D3 --> E
+    D4 --> E
+    D5 --> E
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## 🚀 Key Feature Modules
 
-### Frontend (Mobile)
-| Technology | Purpose | Version |
-|:---|:---|:---|
-| **React Native** | Cross-platform mobile framework | `0.81.5` |
-| **Expo SDK** | Managed workflow & native modules | `54.x` |
-| **TypeScript** | Type-safe development | `5.9.x` |
-| **Expo Router** | File-based navigation | `6.x` |
-| **React Native Reanimated** | Smooth 60fps animations | `4.1.x` |
-| **React Native Maps** | Geofencing & map visualization | `1.20.x` |
-| **Expo Location** | Background location tracking | `19.x` |
-| **Expo Notifications** | Push notification alerts | `0.32.x` |
-| **Expo Image Picker** | Camera & gallery integration | `17.x` |
+### 1. 🚭 Smoker Profile (LastPuff)
+- **Live Recovery Ticker Engine (`LiveTimerTicker`)**: Real-time ticker counting smoke-free seconds (`02d : 14h : 38m : 42s`) with live rupee savings calculator, cigarettes avoided, and estimated life regained.
+- **24/7 Red SOS Craving Shield (`app/sos.tsx`)**:
+  - **🧘 Guided 4-7-8 Pranayama Breathing**: Physical spring expansion on 4s Inhale, 7s Hold, and 8s Exhale with rhythmic haptics.
+  - **🎚️ Craving Distress Slider (1-10)**: Ambient aura dynamically shifts from calming amber to emergency crimson.
+  - **🎮 Panic Distraction Mini-Games**: 60-second *Bubble Burst* (multi-touch popping physics + combo multiplier) and Zen *Focus Flow* pattern matching.
+  - **📞 Direct Lifeline**: Toll-free National Tobacco Quitline (`1800-11-2356`) + instant Guardian Emergency SMS alert (`expo-sms`).
+- **AI Disease Risk Analyzer (`app/disease-risk.tsx`)**: Pack-year calculations with 5 organ radial recovery meters (*COPD, Lung Cancer, Heart Disease, Stroke, PVD*).
+- **30-Day Stepdown Protocol (`app/quit-plan.tsx`)**: Daily cigarette caps, streak tracking, and Gemini AI quit plan generator.
 
-### Backend (API Server)
-| Technology | Purpose | Version |
-|:---|:---|:---|
-| **Node.js** | Server-side JavaScript runtime | `LTS` |
-| **Express.js** | RESTful API framework | `4.22.x` |
-| **MongoDB** | NoSQL document database | `Latest` |
-| **Mongoose** | ODM for MongoDB | `8.20.x` |
-| **JWT** | Stateless authentication tokens | `9.x` |
-| **bcrypt.js** | Password hashing & verification | `2.4.x` |
-| **Cloudinary** | Cloud-based media management | `2.8.x` |
-| **Multer** | Multipart file upload handling | `2.0.x` |
+### 2. ⚡ Fitness & Wellness Profile (Navjivan)
+- **🇮🇳 Padyatra Virtual Pilgrimage (`app/padyatra.tsx`)**: Pedometer-driven step tracking across historical routes (*Dandi Salt March (390 km)*, *Char Dham (1,200 km)*, *Everest Trail*) with interactive landmark pins and trivia cards.
+- **⭕ Concentric Health Rings (`ConcentricRings`)**: Triple-ring SVG visualizer tracking Daily Steps, Active Cardio minutes, and Hydration score.
+- **🥗 Nutrition & 1-Tap Indian Meal Scanner (`app/nutrition.tsx`)**: Point camera at any plate for Gemini Vision nutrient analysis or 1-tap log Indian dishes (*Paneer Tikka, Dal Tadka, Masala Dosa, Chicken Biryani*) + daily 3.0L water bottle tracker.
+- **🏋️ Athlete Performance Lab (`app/athlete-training.tsx`)**: Sport-specific periodization (*Cricket, Running, Badminton, Kabaddi, Football*) across Base, Power, and Agility phases.
+- **🧠 Mental Fitness & Focus (`app/mental-health.tsx`)**: AI confidence scripts, mood journal, and focus affirmations.
 
-### AI & Intelligence
-| Technology | Purpose |
-|:---|:---|
-| **Agentic AI** | Autonomous habit analysis & personalized intervention |
-| **Generative AI** | Context-aware wellness recommendations |
-| **Geofencing AI** | Location-based trigger prediction & avoidance |
+### 3. 🤖 Live Agentic AI & Swadeshi Gamification
+- **Live Gemini 3.6 Flash Copilot (`app/chatbot.tsx`)**: 24/7 intelligent coach providing empathetic smoking cessation tactics or athletic periodization tips.
+- **Autonomous AI Goals Agent (`app/goals.tsx`)**: Synthesizes 3 personalized daily quests based on live user streak and recovery data.
+- **XP & 5-Tier Leveling**: Earn XP by resisting cravings, walking steps, completing workouts, and checking in.
+- **Brand Partner Store (`app/rewards/index.tsx`)**: Redeem XP for genuine discount vouchers with Indian brand partners (*MuscleBlaze, The Whole Truth, Cult.fit, Khadi India, boAt*).
+- **3-Tier SaaS Paywall (`app/subscription.tsx`)**: Free Starter, Navjivan Pro (₹299/mo), and Elite Clinical Concierge (₹699/mo).
 
 ---
 
-## 📁 Project Structure
+## 🏗️ Technical Architecture
+
+### Frontend Stack
+- **Framework**: React Native with Expo SDK 57 (Expo Router file-based navigation)
+- **Type Safety**: TypeScript Strict Mode (`npx tsc --noEmit` clean: 0 errors, 0 warnings)
+- **Styling**: Obsidian Dark Luxury palette (`#050508` OLED base, `#0E0E17` glass surface), specular highlights, and neon glow accents (`#00F5A0`, `#8B5CF6`)
+- **Animation**: `react-native-reanimated` (4.5.1) + `react-native-svg` custom charts
+- **Sensors & Native APIs**: `expo-sensors` (Pedometer), `expo-location` (Geofencing), `expo-image-picker` (Camera Vision), `expo-haptics`, `expo-sms`
+
+### Backend Stack
+- **Runtime**: Node.js (ES Modules `"type": "module"`) + Express.js
+- **Database**: MongoDB with Mongoose ODM (11 Schemas: `User`, `CravingLog`, `CigaretteLog`, `NutritionLog`, `StepLog`, `Goal`, `GeoHotspot`, `Reward`, `ChatMessage`, `Post`, `Comment`)
+- **AI Engine**: Provider-agnostic `aiService.js` powered by **Google Gemini 3.6 Flash** with in-memory response caching, rate-limiting, and 4-second timeout failover
+- **Security & Optimization**: Helmet headers, gzip compression, morgan logging, express-rate-limit
+
+---
+
+## 📦 Project Structure
 
 ```
-LastPuff/
-├── 📱 lastpuff-frontend/               # React Native + Expo Mobile App
-│   ├── app/
-│   │   ├── (tabs)/
-│   │   │   ├── index.tsx               # Home Dashboard (streak, stats, savings)
-│   │   │   ├── stats.tsx               # Detailed analytics & progress charts
-│   │   │   ├── geofencing.tsx          # Location-based trigger zone mapping
-│   │   │   ├── explore.tsx             # Wellness content & recommendations
-│   │   │   └── profile.tsx             # User profile & settings
-│   │   ├── auth/                       # Login & registration screens
-│   │   ├── community/                  # Social feed & interactions
-│   │   ├── goals.tsx                   # Goal setting & tracking
-│   │   ├── sos.tsx                     # Emergency craving intervention
-│   │   └── _layout.tsx                 # Root navigation layout
-│   ├── components/
-│   │   ├── PostCard.tsx                # Community post component
-│   │   ├── Shine.tsx                   # Premium UI shine effect
-│   │   ├── parallax-scroll-view.tsx    # Parallax scrolling container
-│   │   └── ui/                         # Reusable UI primitives
-│   ├── services/
-│   │   ├── api.ts                      # HTTP client & interceptors
-│   │   ├── dashboard.ts               # Dashboard data fetching
-│   │   └── posts.ts                    # Community post CRUD operations
-│   ├── context/                        # React Context providers
-│   ├── hooks/                          # Custom React hooks
-│   ├── constants/                      # App-wide constants & config
-│   └── assets/                         # Images, fonts & static resources
-│
-├── 🖥️ lastpuff-backend/                # Node.js + Express API Server
+navjivan-sih-project/
+├── lastpuff-backend/
 │   └── express-app/
-│       ├── server.js                   # Express app entry point
-│       ├── config/                     # Database & app configuration
-│       ├── controllers/
-│       │   ├── AuthController.js       # User signup, login, token refresh
-│       │   ├── dashboardController.js  # User stats, streaks & analytics
-│       │   ├── post.controller.js      # Community posts CRUD + image upload
-│       │   └── comment.controller.js   # Post comments & interactions
-│       ├── models/
-│       │   ├── User.js                 # User schema (auth, profile, habits)
-│       │   ├── post.model.js           # Community post schema
-│       │   └── comment.model.js        # Comment schema with references
-│       ├── routes/
-│       │   ├── authRoutes.js           # /api/auth/* endpoints
-│       │   ├── dashboardRoutes.js      # /api/dashboard/* endpoints
-│       │   ├── post.routes.js          # /api/posts/* endpoints
-│       │   ├── comment.routes.js       # /api/comments/* endpoints
-│       │   └── uploadTest.routes.js    # Media upload testing
-│       ├── middlewares/                # JWT verification & request validation
-│       └── utils/                      # Utility functions & helpers
+│       ├── controllers/       # 12 REST Controllers (Auth, AI, Goals, SOS, Nutrition, etc.)
+│       ├── middlewares/       # JWT Authentication & Multer upload middleware
+│       ├── models/            # 11 Mongoose Schemas (User, CravingLog, Goal, etc.)
+│       ├── routes/            # 13 Route Groups (/api/auth, /api/ai, /api/goals, etc.)
+│       ├── services/          # aiService.js (Gemini), notifications.js, cronJobs.js
+│       └── server.js          # Express server with rate limiting & security
 │
-└── 📄 README.md                        # Project documentation (you are here)
+└── lastpuff-frontend/
+    ├── app/
+    │   ├── (tabs)/            # Tabs: Home, Explore, Geofencing, Stats, Profile
+    │   ├── games/             # Bubble Burst & Zen Focus Flow mini-games
+    │   ├── onboarding/        # Dual-profile onboarding & specialized setup
+    │   ├── rewards/           # XP Leveling & Swadeshi Brand Store
+    │   ├── athlete-training   # Sport-specific periodization lab
+    │   ├── chatbot.tsx        # 24/7 Gemini Copilot
+    │   ├── disease-risk.tsx   # Pack-year organ recovery radar
+    │   ├── fitness-plans.tsx  # Interactive workout mode & rest timers
+    │   ├── goals.tsx          # Agentic AI daily missions & goal tracker
+    │   ├── mental-health.tsx  # Focus affirmations & mood tracker
+    │   ├── nutrition.tsx      # Gemini Vision meal scanner & water tracker
+    │   ├── padyatra.tsx       # Historical pilgrimage step tracker
+    │   ├── quit-plan.tsx      # 30-day stepdown quit protocol
+    │   ├── sos.tsx            # 24/7 Red SOS Craving Shield & 4-7-8 breathing
+    │   └── subscription.tsx   # 3-tier SaaS paywall
+    │
+    ├── components/ui/         # LiveTimerTicker, ConcentricRings, QuickActionDock, GlassCard
+    ├── constants/theme.ts     # Obsidian OLED design tokens & gradients
+    ├── context/               # AuthContext.tsx & UserContext.tsx
+    └── services/api.ts        # Typed Axios client with dynamic host discovery
 ```
 
 ---
 
-## ⚡ Getting Started
+## ⚡ Quick Start Guide
 
-### Prerequisites
+### 1. Prerequisites
+- **Node.js**: v18.0.0 or newer
+- **Expo Go**: Installed on Android / iOS device
 
+### 2. Start Backend API
 ```bash
-node >= 18.x
-npm >= 9.x
-MongoDB (local or Atlas)
-Expo CLI
-Android Studio / Xcode (for emulators)
-```
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/AdityaMani-2003/navjivan-sih-project.git
-cd navjivan-sih-project
-```
-
-### 2. Backend Setup
-
-```bash
-cd lastpuff-backend/express-app
-
-# Install dependencies
+cd "lastpuff-backend/express-app"
 npm install
-
-# Configure environment variables
-cp .env.example .env
-# Edit .env with your MongoDB URI, JWT secret, Cloudinary credentials
-
-# Start development server
 npm run dev
+# API running on http://localhost:5000 (0.0.0.0)
 ```
 
-### 3. Frontend Setup
-
+### 3. Start Expo Frontend App
 ```bash
-cd lastpuff-frontend
-
-# Install dependencies
+cd "lastpuff-frontend"
 npm install
-
-# Start Expo development server
-npx expo start
-
-# Run on Android
-npx expo run:android
-
-# Run on iOS
-npx expo run:ios
+npx expo start -c
 ```
+*Scan the terminal QR code using **Expo Go** on Android or the Camera app on iOS.*
 
 ---
 
-## 🔌 API Endpoints
-
-### Authentication
-| Method | Endpoint | Description |
-|:---|:---|:---|
-| `POST` | `/api/auth/signup` | Register new user |
-| `POST` | `/api/auth/login` | Authenticate & receive JWT |
-
-### Dashboard
-| Method | Endpoint | Description |
-|:---|:---|:---|
-| `GET` | `/api/dashboard/stats` | Fetch user statistics & streaks |
-| `GET` | `/api/dashboard/analytics` | Get detailed health analytics |
-
-### Community
-| Method | Endpoint | Description |
-|:---|:---|:---|
-| `GET` | `/api/posts` | List all community posts |
-| `POST` | `/api/posts` | Create new post (with image) |
-| `PUT` | `/api/posts/:id/like` | Like/unlike a post |
-| `DELETE` | `/api/posts/:id` | Delete own post |
-| `POST` | `/api/comments` | Add comment to a post |
-| `GET` | `/api/comments/:postId` | Get comments for a post |
+## 📜 Documentation & References
+- **[API Documentation (API.md)](./API.md)**: Full REST endpoints specification.
+- **[Contributing Guidelines (CONTRIBUTING.md)](./CONTRIBUTING.md)**: Coding standards and workflow.
 
 ---
 
-## 👥 Team
-
-This project was built as a collaborative effort by a dedicated team of developers for SIH 2025.
-
-| Role | Contribution |
-|:---|:---|
-| **Full-Stack Development** | React Native mobile app, Express.js API, MongoDB data modeling |
-| **AI/ML Integration** | Agentic AI engine, GenAI-powered personalization |
-| **UI/UX Design** | Premium mobile interface, animations, haptic feedback |
-| **DevOps & Testing** | Deployment pipeline, API testing, performance optimization |
-
----
-
-## 🔮 Future Roadmap
-
-- [ ] 🧠 Advanced ML model for relapse prediction
-- [ ] ⌚ Wearable device integration (smartwatch heart rate monitoring)
-- [ ] 🌐 Multi-language support (Hindi, Tamil, Bengali, and more)
-- [ ] 📊 Weekly PDF health reports with AI-generated insights
-- [ ] 🏥 Healthcare provider dashboard for clinical monitoring
-- [ ] 🎮 Gamification system with badges and leaderboards
-
----
-
-## 📄 License
-
-This project was developed as part of the **Smart India Hackathon 2025** initiative by the Government of India.
-
----
-
-<div align="center">
-
-**Built with ❤️ for a healthier India**
-
-[![SIH](https://img.shields.io/badge/Smart_India_Hackathon-2025-orange?style=flat-square)](https://www.sih.gov.in/)
-[![Made with React Native](https://img.shields.io/badge/Made_with-React_Native-61DAFB?style=flat-square&logo=react)](https://reactnative.dev/)
-[![Powered by AI](https://img.shields.io/badge/Powered_by-Agentic_AI-blueviolet?style=flat-square)](https://github.com/AdityaMani-2003/navjivan-sih-project)
-
-*If you found this project interesting, please consider giving it a ⭐*
-
-</div>
+## 🏆 Smart India Hackathon 2025
+*Crafted with passion for a healthier, smoke-free, and athletic India.*

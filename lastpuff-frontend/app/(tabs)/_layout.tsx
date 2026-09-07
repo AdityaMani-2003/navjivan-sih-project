@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { HapticTab } from '@/components/haptic-tab';
+import { COLORS, RADIUS, SHADOWS } from '../../constants/theme';
+import { useUser } from '../../context/UserContext';
 
 interface TabIconProps {
   name: keyof typeof Ionicons.glyphMap;
@@ -21,7 +23,7 @@ const TabIconWithGlow: React.FC<TabIconProps> = ({
     <View style={[styles.iconContainer, focused && styles.iconContainerFocused]}>
       <Ionicons
         name={focused ? name : outlineName}
-        size={24}
+        size={22}
         color={color}
       />
     </View>
@@ -29,24 +31,28 @@ const TabIconWithGlow: React.FC<TabIconProps> = ({
 };
 
 export default function TabLayout() {
+  const { userType } = useUser();
+  const isSmoker = userType !== 'non-smoker';
+  const activeColor = isSmoker ? COLORS.primary : COLORS.secondary;
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#39FF14',
-        tabBarInactiveTintColor: '#666666',
+        tabBarActiveTintColor: activeColor,
+        tabBarInactiveTintColor: COLORS.textMuted,
         headerShown: false,
         tabBarButton: HapticTab as any,
         tabBarStyle: {
-          backgroundColor: '#0A0A0A',
-          borderTopColor: '#1A1A1A',
+          backgroundColor: COLORS.surface,
+          borderTopColor: COLORS.surfaceBorder,
           borderTopWidth: 1,
-          height: 80,
-          paddingBottom: 12,
+          height: Platform.OS === 'ios' ? 86 : 68,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 10,
           paddingTop: 8,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
+          fontSize: 11,
+          fontWeight: '700',
           marginTop: 2,
         },
       }}
@@ -57,8 +63,8 @@ export default function TabLayout() {
           title: 'Home',
           tabBarIcon: ({ color, focused }: any) => (
             <TabIconWithGlow
-              name="home"
-              outlineName="home-outline"
+              name={isSmoker ? 'flame' : 'flash'}
+              outlineName={isSmoker ? 'flame-outline' : 'flash-outline'}
               focused={focused}
               color={String(color)}
             />
@@ -68,7 +74,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="stats"
         options={{
-          title: 'Stats',
+          title: 'Analytics',
           tabBarIcon: ({ color, focused }: any) => (
             <TabIconWithGlow
               name="bar-chart"
@@ -82,11 +88,11 @@ export default function TabLayout() {
       <Tabs.Screen
         name="geofencing"
         options={{
-          title: 'Geofence',
+          title: isSmoker ? 'Hotspots' : 'Heritage',
           tabBarIcon: ({ color, focused }: any) => (
             <TabIconWithGlow
-              name="map"
-              outlineName="map-outline"
+              name="location"
+              outlineName="location-outline"
               focused={focused}
               color={String(color)}
             />
@@ -96,7 +102,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Community',
+          title: 'Tribe',
           tabBarIcon: ({ color, focused }: any) => (
             <TabIconWithGlow
               name="people"
@@ -131,13 +137,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: RADIUS.full,
   },
   iconContainerFocused: {
-    backgroundColor: 'rgba(57, 255, 20, 0.12)',
-    shadowColor: '#39FF14',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
+    backgroundColor: 'rgba(0, 212, 170, 0.1)',
   },
 });

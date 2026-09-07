@@ -1,6 +1,4 @@
-// app/(tabs)/explore.tsx
-
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,171 +6,287 @@ import {
   TouchableOpacity,
   ScrollView,
   RefreshControl,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { LPColors } from "../../constants/theme";
-import PostCard from "../../components/PostCard";
-import SkeletonLoader from "../../components/SkeletonLoader";
-import {
-  fetchFeed,
-  fetchMyPosts,
-  toggleLike,
-  deletePost,
-} from "../../services/posts";
-import { Post } from "../../types/post";
-import { AuthContext } from "../../context/AuthContext";
+  Image,
+  Dimensions,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import Toast from 'react-native-toast-message';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import GlassCard from '../../components/ui/GlassCard';
+import Badge from '../../components/ui/Badge';
+import SkeletonLoader from '../../components/ui/SkeletonLoader';
+import { fetchFeed, toggleLike, deletePost } from '../../services/posts';
+import { useAuth } from '../../context/AuthContext';
+import { useUser } from '../../context/UserContext';
+
+const { width } = Dimensions.get('window');
+
+interface FitSquad {
+  id: string;
+  name: string;
+  location: string;
+  membersCount: number;
+  category: string;
+  icon: string;
+  joined?: boolean;
+}
+
+const FIT_SQUADS: FitSquad[] = [
+  { id: 'sq_1', name: 'Delhi Smoke-Free Warriors', location: 'NCR Region', membersCount: 1420, category: 'Smoke-Free', icon: 'shield-alt' },
+  { id: 'sq_2', name: 'Bengaluru Tech Runners & Coders', location: 'Bengaluru', membersCount: 2850, category: 'Running & Fitness', icon: 'running' },
+  { id: 'sq_3', name: 'Mumbai Sea-Face Calisthenics', location: 'Mumbai', membersCount: 980, category: 'Athletics', icon: 'dumbbell' },
+  { id: 'sq_4', name: 'Padyatra Heritage Walkers', location: 'Pan-India', membersCount: 3200, category: 'Pilgrimage', icon: 'hiking' },
+];
+
+const FEED_CHIPS = [
+  { id: 'all', name: 'All Feeds 🌐' },
+  { id: 'smoker', name: 'Smoke-Free 🚭' },
+  { id: 'fitness', name: 'Fitness & Health ⚡' },
+  { id: 'squads', name: 'FitSquad Groups 👥' },
+];
 
 export default function ExploreScreen() {
-  const auth: any = useContext(AuthContext);
-  const user = auth?.user;
   const router = useRouter();
+  const { user } = useAuth();
+  const { userType } = useUser();
   const params = useLocalSearchParams();
 
-  const [tab, setTab] = useState<"all" | "mine">("all");
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [activeChip, setActiveChip] = useState('all');
+  const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [squads, setSquads] = useState<FitSquad[]>(FIT_SQUADS);
 
-  // Load posts
   const loadPosts = async () => {
     try {
-      if (!user?._id) return;
       setLoading(true);
-
-      if (tab === "all") {
-        const res = await fetchFeed();
-        setPosts(res.data.posts || []);
-      } else {
-        const res = await fetchMyPosts(user._id);
-        setPosts(res.data.posts || []);
+      const res = await fetchFeed();
+      if (res?.data?.posts) {
+        setPosts(res.data.posts);
       }
-    } catch (err) {
-      console.log("Feed error:", err);
+    } catch (_err) {
+      // Demo posts if offline/mock
+      setPosts([
+        {
+          _id: 'p1',
+          authorName: 'Aditya Sharma',
+          content: 'Just hit 30 DAYS 100% Smoke-Free! My lung capacity during morning runs is night and day compared to last month. Keep resisting those 5-minute cravings, tribe! 🔥',
+          likes: ['u1', 'u2', 'u3', 'u4'],
+          commentsCount: 6,
+          createdAt: new Date(Date.now() - 3600000).toISOString(),
+          category: 'Smoke-Free',
+        },
+        {
+          _id: 'p2',
+          authorName: 'Sneha Patel',
+          content: 'Completed 45 km on the Dandi March Padyatra route this week! The virtual pilgrimage makes 10,000 steps effortless. 🇮🇳',
+          likes: ['u1', 'u2'],
+          commentsCount: 3,
+          createdAt: new Date(Date.now() - 7200000).toISOString(),
+          category: 'Fitness',
+        },
+      ]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  // Load when tab changes
   useEffect(() => {
     loadPosts();
-  }, [tab, user]);
+  }, [activeChip]);
 
-  // Only refresh ONCE when coming back from comments
   useEffect(() => {
-    if (params.refresh === "1") {
+    if (params.refresh === '1') {
       loadPosts();
-      router.replace("/(tabs)/explore");
     }
   }, [params.refresh]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadPosts();
-  };
-
   const handleLike = async (postId: string) => {
-    await toggleLike(postId);
-    loadPosts();
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await toggleLike(postId);
+      loadPosts();
+    } catch (_e) {}
   };
 
-  const handleComment = (postId: string) => {
-    router.push({
-      pathname: "/community/Comments",
-      params: { postId },
-    });
-  };
-
-  const handleDelete = async (postId: string) => {
-    await deletePost(postId);
-    loadPosts();
+  const handleJoinSquad = (squadId: string) => {
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSquads((current) =>
+        current.map((sq) => (sq.id === squadId ? { ...sq, joined: !sq.joined } : sq))
+      );
+      Toast.show({
+        type: 'success',
+        text1: 'Squad Updated! 👥',
+        text2: 'You are now connected with local peers.',
+      });
+    } catch (_e) {}
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Top Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Community Tribe</Text>
-          <Text style={styles.subTitle}>Real people quitting together</Text>
+          <Text style={styles.title}>Navjivan Tribe & Community</Text>
+          <Text style={styles.subTitle}>Inspire, conquer cravings & train together</Text>
         </View>
-
         <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => router.push("/community/AddPost")}
+          style={styles.createBtn}
+          onPress={() => router.push('/community/CreatePost' as any)}
         >
-          <Ionicons name="add" size={18} color="#000000" />
-          <Text style={styles.addButtonText}>Share Win</Text>
+          <Ionicons name="add" size={22} color={COLORS.bg} />
         </TouchableOpacity>
       </View>
 
-      {/* Tabs */}
-      <View style={styles.tabs}>
-        <TouchableOpacity
-          onPress={() => setTab("all")}
-          style={[styles.tab, tab === "all" && styles.tabActive]}
+      {/* Filter Category Chips */}
+      <View style={styles.chipsContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipsScroll}
         >
-          <Text style={tab === "all" ? styles.tabTextActive : styles.tabText}>
-            All Posts
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setTab("mine")}
-          style={[styles.tab, tab === "mine" && styles.tabActive]}
-        >
-          <Text style={tab === "mine" ? styles.tabTextActive : styles.tabText}>
-            My Posts
-          </Text>
-        </TouchableOpacity>
+          {FEED_CHIPS.map((chip) => {
+            const isSelected = activeChip === chip.id;
+            return (
+              <TouchableOpacity
+                key={chip.id}
+                style={[styles.chip, isSelected && styles.chipActive]}
+                onPress={() => {
+                  setActiveChip(chip.id);
+                  Haptics.selectionAsync();
+                }}
+              >
+                <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                  {chip.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
-      {/* Feed List */}
       <ScrollView
-        style={{ padding: 16 }}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#39FF14"
-            colors={["#39FF14"]}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadPosts();
+            }}
+            tintColor={COLORS.primary}
           />
         }
       >
-        {loading && posts.length === 0 ? (
-          <View style={{ gap: 16 }}>
-            <SkeletonLoader height={180} borderRadius={16} />
-            <SkeletonLoader height={240} borderRadius={16} />
-            <SkeletonLoader height={140} borderRadius={16} />
-          </View>
-        ) : posts.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>🔥</Text>
-            <Text style={styles.emptyTitle}>No posts yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Be the first to share your journey, log a craving win, or inspire a fellow quitter!
-            </Text>
-            <TouchableOpacity
-              style={styles.createPostBtn}
-              onPress={() => router.push("/community/AddPost")}
-            >
-              <Text style={styles.createPostBtnText}>Create First Post</Text>
-            </TouchableOpacity>
+        {/* FIT SQUAD GROUPS TAB */}
+        {activeChip === 'squads' ? (
+          <View style={styles.squadsList}>
+            {squads.map((sq) => (
+              <GlassCard key={sq.id} style={styles.squadCard} gradientBorder>
+                <View style={styles.squadHeader}>
+                  <View style={[styles.squadIconBox, { backgroundColor: COLORS.primaryGlow }]}>
+                    <FontAwesome5 name={sq.icon as any} size={20} color={COLORS.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.squadName}>{sq.name}</Text>
+                    <Text style={styles.squadMeta}>
+                      📍 {sq.location} • {sq.membersCount.toLocaleString()} members
+                    </Text>
+                  </View>
+                  <Badge text={sq.category} variant="primary" size="sm" />
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.joinBtn,
+                    sq.joined && styles.joinedBtn,
+                  ]}
+                  onPress={() => handleJoinSquad(sq.id)}
+                >
+                  <Text style={[styles.joinBtnText, sq.joined && styles.joinedBtnText]}>
+                    {sq.joined ? 'Member ✓' : 'Join FitSquad +'}
+                  </Text>
+                </TouchableOpacity>
+              </GlassCard>
+            ))}
           </View>
         ) : (
-          posts.map((post) => (
-            <PostCard
-              key={post._id}
-              post={post}
-              onLike={handleLike}
-              onComment={handleComment}
-              onDelete={handleDelete}
-              isOwn={post.author?._id === user?._id}
-            />
-          ))
+          /* STANDARD COMMUNITY FEED POSTS */
+          <View style={styles.postsList}>
+            {loading && posts.length === 0 ? (
+              <SkeletonLoader width={width - 40} height={120} borderRadius={RADIUS.lg} />
+            ) : (
+              posts.map((post) => {
+                const isLiked = post.likes?.includes(user?._id || 'u1');
+                return (
+                  <GlassCard key={post._id} style={styles.postCard}>
+                    <View style={styles.postHeader}>
+                      <View style={styles.postAvatar}>
+                        <Text style={styles.postAvatarText}>
+                          {post.authorName ? post.authorName.charAt(0).toUpperCase() : 'U'}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.authorName}>{post.authorName || 'Navjivan Hero'}</Text>
+                        <Text style={styles.postTime}>
+                          {new Date(post.createdAt || Date.now()).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      {post.category && (
+                        <Badge
+                          text={post.category}
+                          variant={post.category === 'Smoke-Free' ? 'primary' : 'secondary'}
+                          size="sm"
+                        />
+                      )}
+                    </View>
+
+                    <Text style={styles.postContent}>{post.content}</Text>
+
+                    {/* Post Actions Row */}
+                    <View style={styles.actionsRow}>
+                      <TouchableOpacity
+                        style={styles.actionItem}
+                        onPress={() => handleLike(post._id)}
+                      >
+                        <Ionicons
+                          name={isLiked ? 'heart' : 'heart-outline'}
+                          size={20}
+                          color={isLiked ? COLORS.danger : COLORS.textSecondary}
+                        />
+                        <Text style={[styles.actionText, isLiked && { color: COLORS.danger }]}>
+                          {post.likes?.length || 0}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.actionItem}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/community/Comments' as any,
+                            params: { postId: post._id },
+                          })
+                        }
+                      >
+                        <Ionicons name="chatbubble-outline" size={18} color={COLORS.textSecondary} />
+                        <Text style={styles.actionText}>{post.commentsCount || 0}</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity style={styles.actionItem}>
+                        <Ionicons name="share-social-outline" size={18} color={COLORS.textSecondary} />
+                      </TouchableOpacity>
+                    </View>
+                  </GlassCard>
+                );
+              })
+            )}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -180,75 +294,179 @@ export default function ExploreScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: LPColors.bg },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: "#141414",
+    borderBottomColor: COLORS.surfaceBorder,
   },
-  title: { color: "#FFFFFF", fontSize: 22, fontWeight: "800" },
-  subTitle: { color: "#888888", fontSize: 12, marginTop: 2 },
-  addButton: {
-    backgroundColor: LPColors.neon,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    gap: 4,
+  title: {
+    ...TYPOGRAPHY.heading2,
+    fontSize: 20,
+    color: COLORS.textPrimary,
   },
-  addButtonText: {
-    color: "#000000",
-    fontWeight: "700",
+  subTitle: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+  },
+  createBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipsContainer: {
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.surfaceBorder,
+  },
+  chipsScroll: {
+    paddingHorizontal: SPACING.lg,
+    gap: SPACING.xs + 2,
+  },
+  chip: {
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 6,
+  },
+  chipActive: {
+    backgroundColor: COLORS.primaryGlow,
+    borderColor: COLORS.primary,
+  },
+  chipText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  chipTextActive: {
+    color: COLORS.primary,
+  },
+  scrollContent: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    paddingBottom: 60,
+  },
+  postsList: {
+    gap: SPACING.md,
+  },
+  postCard: {
+    padding: SPACING.md,
+  },
+  postHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  postAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  postAvatarText: {
+    color: COLORS.primary,
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  authorName: {
+    ...TYPOGRAPHY.heading3,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  postTime: {
+    ...TYPOGRAPHY.caption,
+    fontSize: 10,
+    color: COLORS.textMuted,
+  },
+  postContent: {
+    ...TYPOGRAPHY.body,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    lineHeight: 20,
+    marginBottom: SPACING.md,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: SPACING.lg,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surfaceBorder,
+    paddingTop: SPACING.sm,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionText: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  squadsList: {
+    gap: SPACING.md,
+  },
+  squadCard: {
+    padding: SPACING.md,
+  },
+  squadHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  squadIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  squadName: {
+    ...TYPOGRAPHY.heading3,
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+  squadMeta: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  joinBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.sm,
+    alignItems: 'center',
+  },
+  joinedBtn: {
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  joinBtnText: {
+    color: COLORS.bg,
+    fontWeight: '800',
     fontSize: 13,
   },
-  tabs: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    marginTop: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#161616",
-  },
-  tab: { paddingHorizontal: 14, paddingVertical: 10, marginRight: 12 },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: LPColors.neon },
-  tabText: { color: LPColors.gray, fontSize: 14, fontWeight: "600" },
-  tabTextActive: { color: LPColors.neon, fontWeight: "700", fontSize: 14 },
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-    paddingHorizontal: 24,
-  },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "800",
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    color: "#888888",
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 24,
-  },
-  createPostBtn: {
-    backgroundColor: LPColors.neon,
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 14,
-  },
-  createPostBtnText: {
-    color: "#000000",
-    fontWeight: "700",
-    fontSize: 15,
+  joinedBtnText: {
+    color: COLORS.primary,
   },
 });

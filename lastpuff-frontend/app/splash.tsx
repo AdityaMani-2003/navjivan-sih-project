@@ -1,30 +1,43 @@
-import React, { useEffect, useContext } from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withSequence,
+  withDelay,
   Easing,
 } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AuthContext } from '../context/AuthContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../context/AuthContext';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../constants/theme';
 
 export default function SplashScreen() {
   const router = useRouter();
-  const { token, loading } = useContext(AuthContext);
+  const { token, loading } = useAuth();
 
-  const opacity = useSharedValue(0);
-  const scale = useSharedValue(0.9);
+  const logoScale = useSharedValue(0.8);
+  const logoOpacity = useSharedValue(0);
+  const textOpacity = useSharedValue(0);
+  const textTranslateY = useSharedValue(20);
+  const badgeOpacity = useSharedValue(0);
 
   useEffect(() => {
-    // Fade in
-    opacity.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.ease) });
-    scale.value = withSequence(
-      withTiming(1.05, { duration: 700 }),
-      withTiming(1.0, { duration: 500 })
+    // 1. Logo pop and pulse
+    logoOpacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
+    logoScale.value = withSequence(
+      withTiming(1.1, { duration: 500, easing: Easing.out(Easing.cubic) }),
+      withTiming(1.0, { duration: 400, easing: Easing.inOut(Easing.ease) })
     );
+
+    // 2. Text slide in
+    textOpacity.value = withDelay(400, withTiming(1, { duration: 600 }));
+    textTranslateY.value = withDelay(400, withTiming(0, { duration: 600, easing: Easing.out(Easing.cubic) }));
+
+    // 3. Footer badge fade in
+    badgeOpacity.value = withDelay(800, withTiming(1, { duration: 500 }));
 
     const timer = setTimeout(async () => {
       if (loading) return;
@@ -34,33 +47,60 @@ export default function SplashScreen() {
       if (!token) {
         router.replace('/auth/login');
       } else if (!onboardingComplete) {
-        router.replace('/onboarding');
+        router.replace('/onboarding' as any);
       } else {
         router.replace('/(tabs)');
       }
-    }, 1600);
+    }, 1800);
 
     return () => clearTimeout(timer);
   }, [loading, token]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ scale: scale.value }],
+  const logoAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: logoOpacity.value,
+    transform: [{ scale: logoScale.value }],
+  }));
+
+  const textAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: textOpacity.value,
+    transform: [{ translateY: textTranslateY.value }],
+  }));
+
+  const badgeAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: badgeOpacity.value,
   }));
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.brandContainer, animatedStyle]}>
-        <View style={styles.logoBadge}>
-          <Text style={styles.logoText}>LP</Text>
-        </View>
-        <Text style={styles.appName}>LastPuff</Text>
-        <Text style={styles.tagline}>Break Free. Live Better.</Text>
+      <LinearGradient
+        colors={['#0A0A0F', '#12121A', '#0A0A0F']}
+        style={StyleSheet.absoluteFill}
+      />
+
+      <Animated.View style={[styles.brandContainer, logoAnimatedStyle]}>
+        <LinearGradient
+          colors={COLORS.gradientPrimary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.logoBadge}
+        >
+          <Text style={styles.logoText}>NJ</Text>
+        </LinearGradient>
       </Animated.View>
 
-      <View style={styles.footer}>
-        <Text style={styles.sihBadge}>Smart India Hackathon 2025 Winner</Text>
-      </View>
+      <Animated.View style={[styles.textContainer, textAnimatedStyle]}>
+        <Text style={styles.appName}>
+          Navjivan <Text style={styles.appSubName}>× LastPuff</Text>
+        </Text>
+        <Text style={styles.tagline}>Break Free • Reclaim Vitality • Live Empowered</Text>
+      </Animated.View>
+
+      <Animated.View style={[styles.footer, badgeAnimatedStyle]}>
+        <View style={styles.badgeWrapper}>
+          <Text style={styles.sihBadge}>SMART INDIA HACKATHON 2025</Text>
+          <Text style={styles.versionText}>Production SaaS Edition</Text>
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -68,57 +108,76 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: COLORS.bg,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: SPACING.lg,
   },
   brandContainer: {
     alignItems: 'center',
+    marginBottom: SPACING.md,
   },
   logoBadge: {
-    width: 100,
-    height: 100,
-    borderRadius: 28,
-    backgroundColor: '#121212',
-    borderWidth: 2.5,
-    borderColor: '#39FF14',
+    width: 96,
+    height: 96,
+    borderRadius: RADIUS.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: '#39FF14',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 10,
+    ...SHADOWS.primary,
   },
   logoText: {
-    color: '#39FF14',
-    fontSize: 44,
+    color: COLORS.bg,
+    fontSize: 40,
     fontWeight: '900',
     letterSpacing: -1,
   },
+  textContainer: {
+    alignItems: 'center',
+  },
   appName: {
-    color: '#FFFFFF',
+    color: COLORS.textPrimary,
     fontSize: 32,
     fontWeight: '800',
-    letterSpacing: 0.5,
-    marginBottom: 8,
+    letterSpacing: -0.5,
+    marginBottom: SPACING.xs,
+  },
+  appSubName: {
+    color: COLORS.primary,
+    fontWeight: '700',
+    fontSize: 24,
   },
   tagline: {
-    color: '#888888',
-    fontSize: 16,
+    color: COLORS.textSecondary,
+    fontSize: 14,
     fontWeight: '500',
-    letterSpacing: 0.5,
+    textAlign: 'center',
+    marginTop: 4,
+    letterSpacing: 0.3,
   },
   footer: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 48,
+    alignItems: 'center',
+  },
+  badgeWrapper: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs + 2,
+    alignItems: 'center',
   },
   sihBadge: {
-    color: '#39FF14',
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 1,
-    opacity: 0.8,
+    color: COLORS.primary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+  },
+  versionText: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: 2,
   },
 });

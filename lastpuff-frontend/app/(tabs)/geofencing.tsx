@@ -23,13 +23,15 @@ import Constants, { ExecutionEnvironment } from "expo-constants";
 import * as Haptics from "expo-haptics";
 import Toast from "react-native-toast-message";
 import { GEOFENCING_TASK_NAME } from "../../tasks/geofencingTask";
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from "../../constants/theme";
+import { fetchNearbyHotspots, reportHotspot } from "../../services/api";
 
 // ------------------------------------------------
 // CONFIG
 // ------------------------------------------------
-const PRIMARY_COLOR = "#39FF14"; // Neon Green
-const BG_COLOR = "#000000"; // Dark Background
-const CARD_BG = "#121212";
+const PRIMARY_COLOR = COLORS.primary; // Teal Green
+const BG_COLOR = COLORS.bg; // Dark Background
+const CARD_BG = COLORS.surface;
 const ASYNC_ZONES_KEY = "@geofence_zones";
 
 interface GeofenceRegion {

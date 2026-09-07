@@ -1,18 +1,42 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, ReactNode, useEffect, useState } from "react";
+import React, { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { Platform } from "react-native";
 // NOTE: expo-notifications is NOT imported statically because it throws
 // immediately in Expo Go SDK 53+. We use dynamic import() below instead.
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { setAuthToken, updateProfile } from "../services/api";
 
+// ─── Types ──────────────────────────────────────────────────
+export type UserType = "smoker" | "non-smoker";
+
+/**
+ * Minimal user object shape from the backend.
+ * Using explicit fields rather than `any` for type safety.
+ * Additional fields beyond these will pass through.
+ */
+interface UserData {
+  _id: string;
+  name: string;
+  email: string;
+  userType: UserType;
+  streak?: number;
+  xp?: number;
+  level?: number;
+  subscriptionTier?: "free" | "premium" | "elite";
+  onboardingComplete?: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any — backend may add fields we haven't typed yet
+  [key: string]: any;
+}
+
 interface AuthContextType {
-  user: any;
+  user: UserData | null;
   token: string | null;
   loading: boolean;
   isAuthenticated: boolean;
-  loginUser: (user: any, token: string) => Promise<void>;
-  updateUser: (updatedUserData: any) => Promise<void>;
+  /** Convenience accessor: user's profile type */
+  userType: UserType | null;
+  loginUser: (user: UserData, token: string, refreshToken?: string) => Promise<void>;
+  updateUser: (updatedUserData: Partial<UserData>) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -21,6 +45,7 @@ export const AuthContext = createContext<AuthContextType>({
   token: null,
   loading: true,
   isAuthenticated: false,
+  userType: null,
   loginUser: async () => {},
   updateUser: async () => {},
   logout: async () => {},
@@ -31,9 +56,12 @@ interface Props {
 }
 
 export const AuthProvider: React.FC<Props> = ({ children }) => {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<UserData | null>(null);
   const [token, setTokenValue] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Derived convenience value
+  const userType: UserType | null = user?.userType ?? null;
 
   // Safely register push token with backend (skip in Expo Go SDK 53+)
   const registerPushNotification = async () => {
@@ -69,11 +97,13 @@ export const AuthProvider: React.FC<Props> = ({ children }) => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const savedUser = await AsyncStorage.getItem("user");
-        const savedToken = await AsyncStorage.getItem("token");
+        const [savedUser, savedToken] = await Promise.all([
+          AsyncStorage.getItem("user"),
+          AsyncStorage.getItem("token"),
+        ]);
 
         if (savedUser && savedToken) {
-          const parsedUser = JSON.parse(savedUser);
+          const parsedUser: UserData = JSON.parse(savedUser);
           setUser(parsedUser);
           setTokenValue(savedToken);
           setAuthToken(savedToken);
@@ -93,29 +123,35 @@ export const AuthProvider: React.FC<Props> = ({ children }) => {
     loadData();
   }, []);
 
-  // Handle login — Save user & token
-  const loginUser = async (userData: any, userToken: string) => {
+  // Handle login — Save user & token (+ optional refreshToken for future use)
+  const loginUser = async (
+    userData: UserData,
+    userToken: string,
+    refreshToken?: string
+  ) => {
     setUser(userData);
     setTokenValue(userToken);
     setAuthToken(userToken);
 
     await AsyncStorage.setItem("user", JSON.stringify(userData));
     await AsyncStorage.setItem("token", userToken);
+    if (refreshToken) {
+      await AsyncStorage.setItem("refreshToken", refreshToken);
+    }
 
     registerPushNotification();
   };
 
   // Handle profile update — Update state and local storage
-  const updateUser = async (updatedUserData: any) => {
-    const merged = { ...user, ...updatedUserData };
+  const updateUser = async (updatedUserData: Partial<UserData>) => {
+    const merged: UserData = { ...user!, ...updatedUserData };
     setUser(merged);
     await AsyncStorage.setItem("user", JSON.stringify(merged));
   };
 
   // Handle logout — Clear data & remove token from axios
   const logout = async () => {
-    await AsyncStorage.removeItem("token");
-    await AsyncStorage.removeItem("user");
+    await AsyncStorage.multiRemove(["token", "user", "refreshToken"]);
     setTokenValue(null);
     setUser(null);
     setAuthToken(null);
@@ -128,6 +164,7 @@ export const AuthProvider: React.FC<Props> = ({ children }) => {
         token,
         loading,
         isAuthenticated: !!token,
+        userType,
         loginUser,
         updateUser,
         logout,
@@ -137,3 +174,12 @@ export const AuthProvider: React.FC<Props> = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+
+/** Convenience hook */
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return ctx;
+}
