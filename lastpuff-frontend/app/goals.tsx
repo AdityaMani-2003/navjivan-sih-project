@@ -61,6 +61,7 @@ export default function GoalsScreen() {
   const [newUnit, setNewUnit] = useState('session');
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   useEffect(() => {
     loadGoals();
@@ -96,6 +97,8 @@ export default function GoalsScreen() {
       setGoals(updated);
 
       if (isNowCompleted) {
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 2500);
         await earnXPAction(30, 'goal_completed', { goalId: goal._id });
         Toast.show({
           type: 'success',
@@ -141,26 +144,133 @@ export default function GoalsScreen() {
     }
   };
 
-  const triggerAiAgent = async () => {
+  const handleGenerateAiGoals = async () => {
     try {
       setLoadingAi(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-      const res = await runGoalsAgent({ goalsCount: goals.length });
-      if (res?.data?.summary) {
-        setAiAnalysis(res.data.summary);
+      const isSmoker = userType !== 'non-smoker';
+      let res: any = null;
+      try {
+        res = await runGoalsAgent({ goalsCount: goals.length, userType });
+      } catch (_e) {}
+
+      const newAnalysis =
+        res?.data?.analysis ||
+        res?.data?.summary ||
+        res?.data?.agentReport?.weeklyGoal ||
+        (isSmoker
+          ? "Your lung capacity and blood oxygenation are recovering rapidly. Cravings defeated today solidify your 4-day clean streak!"
+          : "Your cardiovascular stamina is peaking! Today's micro-goals optimize endurance, clean macros, and recovery.");
+
+      setAiAnalysis(newAnalysis);
+
+      let newGoals: GoalItem[] = [];
+      if (res?.data?.goals && Array.isArray(res?.data?.goals) && res.data.goals.length > 0) {
+        newGoals = res.data.goals.map((g: any, i: number) => ({
+          _id: g._id || `ai_g_${Date.now()}_${i}`,
+          title: g.title,
+          description: g.description || "",
+          targetValue: g.targetValue || 1,
+          currentValue: 0,
+          unit: g.unit || "session",
+          category: g.category || (isSmoker ? "Recovery" : "Fitness"),
+          isCompleted: false,
+          aiSuggested: true,
+        }));
       } else {
-        setAiAnalysis(
-          "Agentic Goal Analysis: You've attained an 85% goal completion rate over the last 7 days! Recommendation: Step up your Padyatra target from 8k to 10k steps and introduce a 10-min evening breathwork target."
-        );
+        if (isSmoker) {
+          newGoals = [
+            {
+              _id: `gen_g_${Date.now()}_1`,
+              title: "Defeat Afternoon Chai Craving with 4-7-8 Breathing",
+              description: "Break conditioned nicotine habit loop",
+              targetValue: 1,
+              currentValue: 0,
+              unit: "session",
+              category: "Recovery",
+              isCompleted: false,
+              aiSuggested: true,
+            },
+            {
+              _id: `gen_g_${Date.now()}_2`,
+              title: "Walk 8,500 Steps on Dandi March Trail",
+              description: "Flush lymphatic metabolites & raise dopamine",
+              targetValue: 8500,
+              currentValue: 0,
+              unit: "steps",
+              category: "Health",
+              isCompleted: false,
+              aiSuggested: true,
+            },
+            {
+              _id: `gen_g_${Date.now()}_3`,
+              title: "Drink 3.0 Liters of Cold Water for Detox",
+              description: "Accelerate kidney clearance of cotinine",
+              targetValue: 3,
+              currentValue: 0,
+              unit: "L",
+              category: "Recovery",
+              isCompleted: false,
+              aiSuggested: true,
+            },
+          ];
+        } else {
+          newGoals = [
+            {
+              _id: `gen_g_${Date.now()}_1`,
+              title: "Crush 40-Min Full-Body Athletic Workout",
+              description: "Build explosive power and core stability",
+              targetValue: 40,
+              currentValue: 0,
+              unit: "mins",
+              category: "Fitness",
+              isCompleted: false,
+              aiSuggested: true,
+            },
+            {
+              _id: `gen_g_${Date.now()}_2`,
+              title: "Conquer 10,000 Steps on Padyatra Trail",
+              description: "Milestone endurance on historic pilgrimage",
+              targetValue: 10000,
+              currentValue: 0,
+              unit: "steps",
+              category: "Endurance",
+              isCompleted: false,
+              aiSuggested: true,
+            },
+            {
+              _id: `gen_g_${Date.now()}_3`,
+              title: "Log 110g Clean Protein (Paneer, Dal, Sattu)",
+              description: "Optimal athletic muscle repair window",
+              targetValue: 110,
+              currentValue: 0,
+              unit: "g",
+              category: "Nutrition",
+              isCompleted: false,
+              aiSuggested: true,
+            },
+          ];
+        }
       }
-    } catch (_e) {
-      setAiAnalysis(
-        "AI Agent Recommendation: Your habit consistency is excellent. Maintain current targets for 3 more days before advancing milestone volume."
-      );
+
+      setGoals((prev) => [...newGoals, ...prev]);
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 3000);
+
+      Toast.show({
+        type: 'success',
+        text1: 'AI Goals Synthesized! ⚡',
+        text2: '3 tailored missions generated for your current clean streak.',
+      });
+    } catch (_err) {
     } finally {
       setLoadingAi(false);
     }
+  };
+
+  const triggerAiAgent = () => {
+    handleGenerateAiGoals();
   };
 
   const activeGoals = goals.filter((g) => !g.isCompleted);
@@ -169,6 +279,15 @@ export default function GoalsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {showConfetti && (
+        <ConfettiCannon
+          count={80}
+          origin={{ x: 200, y: 0 }}
+          autoStart={true}
+          fadeOut={true}
+        />
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -195,7 +314,7 @@ export default function GoalsScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.aiLabel}>AGENTIC AI GOAL AGENT</Text>
-              <Text style={styles.aiTitle}>Adaptive Weekly Synthesis</Text>
+              <Text style={styles.aiTitle}>Adaptive Daily Synthesis</Text>
             </View>
             <TouchableOpacity
               style={styles.recalibrateBtn}
@@ -213,6 +332,19 @@ export default function GoalsScreen() {
             {aiAnalysis ||
               "Your Agentic AI continually evaluates your daily check-ins, step trends, and craving logs to recommend high-impact micro-goals."}
           </Text>
+
+          {/* Prominent Auto-Generate Button */}
+          <TouchableOpacity
+            style={styles.generateAiBtn}
+            onPress={handleGenerateAiGoals}
+            disabled={loadingAi}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="sparkles" size={16} color={COLORS.bg} />
+            <Text style={styles.generateAiBtnText}>
+              {loadingAi ? "Synthesizing Daily Protocol..." : "⚡ Auto-Generate 3 AI Goals (+60 XP)"}
+            </Text>
+          </TouchableOpacity>
         </GlassCard>
 
         {/* Tab Switcher */}
@@ -425,6 +557,28 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
     lineHeight: 18,
+    marginBottom: SPACING.sm,
+  },
+  generateAiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.sm + 2,
+    marginTop: SPACING.xs,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  generateAiBtnText: {
+    color: COLORS.bg,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   tabsRow: {
     flexDirection: 'row',

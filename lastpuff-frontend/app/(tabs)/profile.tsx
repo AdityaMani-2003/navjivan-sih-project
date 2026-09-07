@@ -211,6 +211,35 @@ export default function ProfileScreen() {
         <View style={styles.settingsList}>
           <TouchableOpacity
             style={styles.settingItem}
+            onPress={() => router.push('/onboarding' as any)}
+          >
+            <Ionicons name="clipboard-outline" size={20} color={COLORS.primary} />
+            <Text style={styles.settingText}>Retake Health Questionnaire & AI Setup</Text>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() => router.push(userType === 'non-smoker' ? ('/fitness-plans' as any) : ('/quit-plan' as any))}
+          >
+            <MaterialCommunityIcons name="robot" size={20} color={COLORS.secondary} />
+            <Text style={styles.settingText}>
+              {userType === 'non-smoker' ? 'AI Athletic Training Plan' : 'AI 30-Day Quit Protocol'}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() => router.push('/goals' as any)}
+          >
+            <Ionicons name="sparkles" size={20} color={COLORS.accent} />
+            <Text style={styles.settingText}>Agentic AI Daily Goals Planner</Text>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingItem}
             onPress={() => router.push('/edit-profile' as any)}
           >
             <Ionicons name="person-outline" size={20} color={COLORS.textPrimary} />

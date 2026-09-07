@@ -73,15 +73,19 @@ export default function QuitPlanScreen() {
       });
 
       if (res?.data?.plan) {
-        setAiPlan(res.data.plan.overview || res.data.plan.summary || JSON.stringify(res.data.plan));
+        const p = res.data.plan;
+        const text = p.explanation
+          ? `Protocol: ${p.recommendation === 'cold_turkey' ? 'Cold Turkey Sprint' : 'Gradual Reduction'}\n\n${p.explanation}\n\n• Today's Strategy: ${p.dailyPlan?.[0]?.tip || 'Replace first smoke with 500ml warm lemon water.'}\n• Tomorrow: ${p.dailyPlan?.[1]?.tip || 'Use 4-7-8 breathing when urge peaks.'}`
+          : p.overview || p.summary || JSON.stringify(p);
+        setAiPlan(text);
       } else {
         setAiPlan(
-          "Your personalized 30-day AI protocol: Replace morning cigarette with 500ml warm lemon water and 2 min box breathing. Cap daily limit at 4 cigs this week, stepping down to 2 next Monday. You're on track to save ₹6,200/mo!"
+          "Personalized 30-Day AI Protocol:\n\nDelay morning cigarette by 90 minutes. Substitute midday craving break with brisk 5-min walk and 500ml cold water. Cap daily limit at 4 cigs this week, stepping down to 2 next Monday. You are projected to save ₹6,200/mo!"
         );
       }
     } catch (_err) {
       setAiPlan(
-        "AI Quit Plan Activated: Focus on delaying the first smoke by 90 minutes each morning. Substitute midday break with brisk 5-min walk. Current projection: 100% smoke-free in 24 days!"
+        "AI Quit Plan Activated:\n\nFocus on delaying the first smoke by 90 minutes each morning. Substitute midday break with brisk 5-min walk. Current projection: 100% smoke-free in 24 days!"
       );
     } finally {
       setLoadingAi(false);
@@ -217,8 +221,29 @@ export default function QuitPlanScreen() {
           </View>
 
           {aiPlan ? (
-            <View style={styles.aiPlanBox}>
-              <Text style={styles.aiPlanText}>{aiPlan}</Text>
+            <View>
+              <View style={styles.aiPlanBox}>
+                <Text style={styles.aiPlanText}>{aiPlan}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: COLORS.primary, borderRadius: 8, paddingVertical: 10, alignItems: 'center' }}
+                  onPress={generateAiPlan}
+                  disabled={loadingAi}
+                >
+                  <Text style={{ color: COLORS.bg, fontWeight: '800', fontSize: 12 }}>
+                    {loadingAi ? 'Recalculating...' : 'Regenerate Plan ✨'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: COLORS.surfaceElevated, borderWidth: 1, borderColor: COLORS.surfaceBorder, borderRadius: 8, paddingVertical: 10, alignItems: 'center' }}
+                  onPress={() => router.push('/onboarding/smoker-setup' as any)}
+                >
+                  <Text style={{ color: COLORS.textSecondary, fontWeight: '700', fontSize: 12 }}>
+                    Retake Survey 📋
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : (
             <GradientButton

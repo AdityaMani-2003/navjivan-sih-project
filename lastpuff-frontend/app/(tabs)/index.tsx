@@ -213,9 +213,11 @@ export default function HomeScreen() {
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarLetter}>{userName.charAt(0).toUpperCase()}</Text>
           </View>
-          <View>
-            <Text style={styles.greetingText}>Namaste, {userName.split(' ')[0]} 👋</Text>
-            <Text style={styles.userRoleTag}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greetingText} numberOfLines={1}>
+              Namaste, {userName.split(' ')[0]} 👋
+            </Text>
+            <Text style={styles.userRoleTag} numberOfLines={1}>
               {isSmoker ? 'Smoke-Free Vanguard' : 'Athlete & Fitness Pioneer'}
             </Text>
           </View>
@@ -488,9 +490,11 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
   userProfileRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm + 2,
+    gap: SPACING.sm,
+    marginRight: SPACING.xs,
   },
   avatarCircle: {
     width: 40,

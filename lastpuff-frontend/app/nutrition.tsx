@@ -466,24 +466,26 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm + 4,
   },
   waterTitleRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: SPACING.xs,
+    marginRight: SPACING.xs,
   },
   waterTitle: {
     ...TYPOGRAPHY.heading3,
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textPrimary,
   },
   waterSub: {
     ...TYPOGRAPHY.caption,
-    fontSize: 11,
+    fontSize: 10,
     color: COLORS.textMuted,
     marginTop: 1,
   },
   waterControls: {
     flexDirection: 'row',
-    gap: SPACING.xs + 2,
+    gap: SPACING.xs,
   },
   waterBtn: {
     width: 32,
@@ -525,7 +527,8 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   mealCardBtn: {
-    width: '48%',
+    flexBasis: '47%',
+    flexGrow: 1,
   },
   mealCardInner: {
     padding: SPACING.md,

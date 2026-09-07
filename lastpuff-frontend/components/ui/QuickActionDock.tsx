@@ -134,9 +134,10 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   dockBtn: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: SPACING.xs,
+    paddingHorizontal: 2,
   },
   dockIconCircle: {
     width: 42,

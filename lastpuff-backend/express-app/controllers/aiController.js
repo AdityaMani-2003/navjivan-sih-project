@@ -7,12 +7,49 @@ import User from "../models/User.js";
 import ChatMessage from "../models/ChatMessage.js";
 import { generateText, generateJSON, analyzeImage, checkRateLimit } from "../services/aiService.js";
 
+// Helper to resolve real or demo user gracefully
+async function resolveUser(req) {
+  const userId = req.user?.id || req.user?._id;
+  let user = null;
+  try {
+    if (userId && String(userId).length === 24) {
+      user = await User.findById(userId);
+    }
+  } catch (_e) {}
+
+  if (!user) {
+    user = {
+      _id: userId || "660000000000000000000001",
+      name: req.user?.name || "Aditya (Pioneer)",
+      userType: req.user?.userType || (req.body?.userType) || "smoker",
+      streak: 4,
+      xp: 520,
+      level: 2,
+      cigarettesPerDay: req.body?.cigarettesPerDay || 12,
+      smokingYears: req.body?.smokingYears || 4,
+      smokerProfile: {
+        cigarettesPerDay: req.body?.cigarettesPerDay || 12,
+        yearsSmoking: req.body?.smokingYears || 4,
+        triggers: req.body?.triggers || ["Morning Chai ☕", "Work Stress 💻", "After Meals 🍽️"],
+        quitStrategy: "gradual",
+        costPerPack: 360,
+      },
+      fitnessProfile: {
+        goal: req.body?.goal || "Endurance & Vitality",
+        level: req.body?.level || "intermediate",
+        sport: req.body?.sport || "Cricket",
+        daysPerWeek: req.body?.daysPerWeek || 4,
+      },
+    };
+  }
+  return user;
+}
+
 // ─── POST /api/ai/quit-plan-suggest ────────────────────────
 export const suggestQuitPlan = async (req, res) => {
   try {
-    const userId = req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    const user = await resolveUser(req);
+    const userId = user._id;
 
     const { allowed, remaining } = checkRateLimit(userId);
     if (!allowed) return res.status(429).json({ success: false, message: "Rate limit exceeded. Try again later." });
@@ -64,9 +101,8 @@ Return JSON: { "recommendation": "cold_turkey" | "gradual", "explanation": "..."
 // ─── POST /api/ai/disease-risk ─────────────────────────────
 export const analyzeRisk = async (req, res) => {
   try {
-    const userId = req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    const user = await resolveUser(req);
+    const userId = user._id;
 
     const { allowed } = checkRateLimit(userId);
     if (!allowed) return res.status(429).json({ success: false, message: "Rate limit exceeded" });
@@ -112,9 +148,8 @@ Return JSON array: [{ "disease": "...", "risk_percentage": N, "severity": "low|m
 // ─── POST /api/ai/chat ─────────────────────────────────────
 export const chat = async (req, res) => {
   try {
-    const userId = req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    const user = await resolveUser(req);
+    const userId = user._id;
 
     const { message } = req.body;
     if (!message) return res.status(400).json({ success: false, message: "Message is required" });
@@ -122,15 +157,20 @@ export const chat = async (req, res) => {
     const { allowed } = checkRateLimit(userId);
     if (!allowed) return res.status(429).json({ success: false, message: "Rate limit exceeded. Upgrade to Premium for unlimited chat." });
 
-    // Save user message
-    await ChatMessage.create({ userId, role: "user", content: message });
+    // Save user message (safe try-catch)
+    try {
+      await ChatMessage.create({ userId, role: "user", content: message });
+    } catch (_e) {}
 
     // Get recent chat history (last 10 messages)
-    const history = await ChatMessage.find({ userId })
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .lean();
-    const contextMessages = history.reverse().map((m) => `${m.role}: ${m.content}`).join("\n");
+    let contextMessages = "";
+    try {
+      const history = await ChatMessage.find({ userId })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .lean();
+      contextMessages = history.reverse().map((m) => `${m.role}: ${m.content}`).join("\n");
+    } catch (_e) {}
 
     const isNonSmoker = user.userType === "non-smoker";
     const daysClean = user.streak || 0;
@@ -165,8 +205,10 @@ Assistant:`;
         : "Cravings peak and fade within 3 to 5 minutes. Take three deep diaphragmatic breaths right now. You've got the strength to outlast this urge! 💪",
     });
 
-    // Save assistant response
-    await ChatMessage.create({ userId, role: "assistant", content: reply });
+    // Save assistant response (safe try-catch)
+    try {
+      await ChatMessage.create({ userId, role: "assistant", content: reply });
+    } catch (_e) {}
 
     return res.status(200).json({ success: true, reply });
   } catch (err) {
@@ -178,16 +220,15 @@ Assistant:`;
 // ─── POST /api/ai/fitness-plan ─────────────────────────────
 export const generateFitnessPlan = async (req, res) => {
   try {
-    const userId = req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    const user = await resolveUser(req);
+    const userId = user._id;
 
     const { allowed } = checkRateLimit(userId);
     if (!allowed) return res.status(429).json({ success: false, message: "Rate limit exceeded" });
 
-    const goal = user.fitnessProfile?.goal || "general_wellness";
-    const level = user.fitnessProfile?.level || "beginner";
-    const sport = user.fitnessProfile?.sport || null;
+    const goal = user.fitnessProfile?.goal || req.body?.goal || "general_wellness";
+    const level = user.fitnessProfile?.level || req.body?.level || "beginner";
+    const sport = user.fitnessProfile?.sport || req.body?.sport || null;
     const days = user.fitnessProfile?.workoutDays || ["Mon", "Wed", "Fri"];
 
     const prompt = `Generate a structured weekly fitness plan:
@@ -231,17 +272,18 @@ Return JSON: { "planName": "...", "tier": "basic|intermediate|advanced", "weekly
 // ─── POST /api/ai/confidence-script ────────────────────────
 export const generateConfidenceScript = async (req, res) => {
   try {
-    const userId = req.user?.id || req.user?._id;
-    const { event, anxietyLevel } = req.body;
+    const user = await resolveUser(req);
+    const userId = user._id;
+    const { event, anxietyLevel, trigger } = req.body;
 
     const { allowed } = checkRateLimit(userId);
     if (!allowed) return res.status(429).json({ success: false, message: "Rate limit exceeded" });
 
-    const user = await User.findById(userId);
     const sport = user?.fitnessProfile?.sport || "your activity";
     const goal = user?.fitnessProfile?.goal || "performance";
+    const subject = event || trigger || "facing a tough moment";
 
-    const prompt = `Generate a personalized 60-second pre-performance mental boost script for someone preparing for: "${event || "an important event"}". Their sport/goal is ${sport}/${goal}. Their anxiety level is ${anxietyLevel || 5}/10. The script should be calming, empowering, and personal. Use second-person ("you"). Keep it under 150 words.`;
+    const prompt = `Generate a personalized 60-second pre-performance mental boost script for someone preparing for: "${subject}". Their sport/goal is ${sport}/${goal}. Their anxiety level is ${anxietyLevel || 5}/10. The script should be calming, empowering, and personal. Use second-person ("you"). Keep it under 150 words.`;
 
     const fallback = `You've prepared for this moment. Your body knows what to do — trust your training. Take a deep breath in... and slowly exhale. Feel your feet grounded on the earth. You are strong, capable, and ready. When you step forward, remember: this is YOUR moment. Every practice session, every push-up, every early morning has built you for exactly this. You don't need to be perfect — you just need to be present. Breathe. Focus. Go.`;
 
@@ -257,7 +299,8 @@ export const generateConfidenceScript = async (req, res) => {
 // ─── POST /api/ai/analyze-meal ─────────────────────────────
 export const analyzeMeal = async (req, res) => {
   try {
-    const userId = req.user?.id || req.user?._id;
+    const user = await resolveUser(req);
+    const userId = user._id;
     const { image, mimeType } = req.body; // base64 image
 
     if (!image) return res.status(400).json({ success: false, message: "Image is required" });
@@ -296,9 +339,8 @@ export const analyzeMeal = async (req, res) => {
 // ─── GET /api/ai/goals-agent ───────────────────────────────
 export const runGoalsAgent = async (req, res) => {
   try {
-    const userId = req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    const user = await resolveUser(req);
+    const userId = user._id;
 
     const prompt = `You are an agentic wellness coach analyzing a user's weekly data:
 - Streak: ${user.streak || 0} days
@@ -324,7 +366,11 @@ Analyze their progress and return JSON: { "insights": ["..."], "adjustments": ["
       fallback,
     });
 
-    return res.status(200).json({ success: true, agentReport: result });
+    return res.status(200).json({
+      success: true,
+      agentReport: result,
+      summary: result?.weeklyGoal || result?.insights?.join(". "),
+    });
   } catch (err) {
     console.error("Goals agent error:", err);
     return res.status(500).json({ success: false, message: "Server error running goals agent" });

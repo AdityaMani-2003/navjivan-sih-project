@@ -454,18 +454,21 @@ const styles = StyleSheet.create({
   },
   distressRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 3,
   },
   distressChip: {
-    width: 28,
-    height: 32,
+    flex: 1,
+    height: 34,
     borderRadius: RADIUS.sm,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 0,
   },
   distressChipActive: {
-    transform: [{ scale: 1.1 }],
+    transform: [{ scale: 1.05 }],
   },
   distressChipText: {
     fontSize: 12,
@@ -482,7 +485,7 @@ const styles = StyleSheet.create({
   distractionGrid: {
     flexDirection: 'row',
     gap: SPACING.sm,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   distractionCard: {
     flex: 1,
@@ -521,14 +524,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
     paddingVertical: SPACING.sm + 2,
+    paddingHorizontal: 4,
     borderRadius: RADIUS.md,
     backgroundColor: '#0E0E17',
     borderWidth: 1,
   },
   helplineText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
 });

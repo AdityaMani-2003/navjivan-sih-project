@@ -214,14 +214,15 @@ export default function PadyatraScreen() {
         </GlassCard>
 
         {/* Live Step Simulator / Pedometer Sync */}
+        <Text style={styles.sectionHeading}>LIVE STEP SIMULATOR (+XP)</Text>
         <View style={styles.syncRow}>
           <TouchableOpacity
             style={styles.syncBtn}
             onPress={() => handleSimulateSteps(500)}
             activeOpacity={0.75}
           >
-            <Ionicons name="add" size={16} color={COLORS.primary} />
-            <Text style={styles.syncBtnText}>+500 Steps</Text>
+            <Ionicons name="footsteps" size={14} color={COLORS.primary} />
+            <Text style={styles.syncBtnText} numberOfLines={1}>+500</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -229,8 +230,8 @@ export default function PadyatraScreen() {
             onPress={() => handleSimulateSteps(1000)}
             activeOpacity={0.75}
           >
-            <Ionicons name="add" size={16} color={COLORS.secondary} />
-            <Text style={[styles.syncBtnText, { color: COLORS.secondary }]}>+1,000 Steps</Text>
+            <Ionicons name="footsteps" size={14} color={COLORS.secondary} />
+            <Text style={[styles.syncBtnText, { color: COLORS.secondary }]} numberOfLines={1}>+1,000</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -238,8 +239,8 @@ export default function PadyatraScreen() {
             onPress={() => handleSimulateSteps(2500)}
             activeOpacity={0.75}
           >
-            <Ionicons name="flame" size={16} color={COLORS.accent} />
-            <Text style={[styles.syncBtnText, { color: COLORS.accent }]}>+2,500 Steps</Text>
+            <Ionicons name="flame" size={14} color={COLORS.accent} />
+            <Text style={[styles.syncBtnText, { color: COLORS.accent }]} numberOfLines={1}>+2,500</Text>
           </TouchableOpacity>
         </View>
 

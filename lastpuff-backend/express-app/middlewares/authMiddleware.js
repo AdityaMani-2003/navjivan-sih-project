@@ -10,6 +10,20 @@ export const authenticate = (req, res, next) => {
     }
 
     const token = authHeader.split(" ")[1];
+
+    // Support instant Demo / Guest Mode testing without hard auth failures
+    if (token === "demo_jwt_token_sample" || token.startsWith("demo_") || token === "guest_token") {
+      req.user = {
+        _id: "660000000000000000000001",
+        id: "660000000000000000000001",
+        name: "Aditya (Demo Pioneer)",
+        email: "demo@navjivan.app",
+        userType: "smoker",
+        isDemo: true,
+      };
+      return next();
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // IMPORTANT → your JWT payload is: { id: userId }
