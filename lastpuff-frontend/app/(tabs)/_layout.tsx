@@ -1,38 +1,22 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
-import { HapticTab } from '@/components/haptic-tab';
-import { COLORS, RADIUS, SHADOWS } from '../../constants/theme';
-import { useUser } from '../../context/UserContext';
-
-interface TabIconProps {
-  name: keyof typeof Ionicons.glyphMap;
-  outlineName: keyof typeof Ionicons.glyphMap;
-  focused: boolean;
-  color: string;
-}
-
-const TabIconWithGlow: React.FC<TabIconProps> = ({
-  name,
-  outlineName,
-  focused,
-  color,
-}) => {
-  return (
-    <View style={[styles.iconContainer, focused && styles.iconContainerFocused]}>
-      <Ionicons
-        name={focused ? name : outlineName}
-        size={22}
-        color={color}
-      />
-    </View>
-  );
-};
+import React from "react";
+import { Tabs } from "expo-router";
+import { View, StyleSheet, Platform } from "react-native";
+import {
+  Home,
+  BarChart2,
+  MapPin,
+  Users,
+  User,
+  Flame,
+  Zap,
+} from "lucide-react-native";
+import { HapticTab } from "@/components/haptic-tab";
+import { COLORS, RADIUS, SPACING } from "../../constants/theme";
+import { useUser } from "../../context/UserContext";
 
 export default function TabLayout() {
   const { userType } = useUser();
-  const isSmoker = userType !== 'non-smoker';
+  const isSmoker = userType !== "non-smoker";
   const activeColor = isSmoker ? COLORS.primary : COLORS.secondary;
 
   return (
@@ -43,87 +27,77 @@ export default function TabLayout() {
         headerShown: false,
         tabBarButton: HapticTab as any,
         tabBarStyle: {
-          backgroundColor: COLORS.surface,
-          borderTopColor: COLORS.surfaceBorder,
+          backgroundColor: COLORS.tabBar,
+          borderTopColor: COLORS.tabBarBorder,
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 86 : 68,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 10,
-          paddingTop: 8,
+          height: Platform.OS === "ios" ? 88 : 70,
+          paddingBottom: Platform.OS === "ios" ? 28 : 12,
+          paddingTop: 10,
+          elevation: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: '700',
-          marginTop: 2,
+          fontWeight: "700",
+          marginTop: 4,
         },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color, focused }: any) => (
-            <TabIconWithGlow
-              name={isSmoker ? 'flame' : 'flash'}
-              outlineName={isSmoker ? 'flame-outline' : 'flash-outline'}
-              focused={focused}
-              color={String(color)}
-            />
+          title: "Home",
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconBox, focused && { backgroundColor: `${activeColor}18` }]}>
+              {isSmoker ? (
+                <Flame size={24} color={color} />
+              ) : (
+                <Home size={24} color={color} />
+              )}
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="stats"
         options={{
-          title: 'Analytics',
-          tabBarIcon: ({ color, focused }: any) => (
-            <TabIconWithGlow
-              name="bar-chart"
-              outlineName="bar-chart-outline"
-              focused={focused}
-              color={String(color)}
-            />
+          title: "Analytics",
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconBox, focused && { backgroundColor: `${activeColor}18` }]}>
+              <BarChart2 size={24} color={color} />
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="geofencing"
         options={{
-          title: isSmoker ? 'Hotspots' : 'Heritage',
-          tabBarIcon: ({ color, focused }: any) => (
-            <TabIconWithGlow
-              name="location"
-              outlineName="location-outline"
-              focused={focused}
-              color={String(color)}
-            />
+          title: isSmoker ? "Radar" : "Hotspots",
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconBox, focused && { backgroundColor: `${activeColor}18` }]}>
+              <MapPin size={24} color={color} />
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Tribe',
-          tabBarIcon: ({ color, focused }: any) => (
-            <TabIconWithGlow
-              name="people"
-              outlineName="people-outline"
-              focused={focused}
-              color={String(color)}
-            />
+          title: "Community",
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconBox, focused && { backgroundColor: `${activeColor}18` }]}>
+              <Users size={24} color={color} />
+            </View>
           ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, focused }: any) => (
-            <TabIconWithGlow
-              name="person"
-              outlineName="person-outline"
-              focused={focused}
-              color={String(color)}
-            />
+          title: "Profile",
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconBox, focused && { backgroundColor: `${activeColor}18` }]}>
+              <User size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -132,14 +106,11 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  iconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 38,
+  iconBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 44,
     height: 38,
-    borderRadius: RADIUS.full,
-  },
-  iconContainerFocused: {
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
+    borderRadius: RADIUS.md,
   },
 });

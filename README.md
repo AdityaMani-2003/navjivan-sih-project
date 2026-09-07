@@ -1,174 +1,188 @@
 # 🌿 Navjivan × LastPuff
 
-> **Smart India Hackathon 2025** — Production-Grade AI-Powered Dual-Profile Health, Smoking Cessation & Athletic Vitality Platform.
+> **Smart India Hackathon 2025** — Production-Grade SaaS AI-Powered Dual-Profile Health, Clinical Smoking Cessation & Athletic Conditioning Platform.
 
 [![React Native](https://img.shields.io/badge/React%20Native-0.86.3-61DAFB?logo=react&logoColor=black)](https://reactnative.dev/)
 [![Expo SDK](https://img.shields.io/badge/Expo%20SDK-57-000020?logo=expo&logoColor=white)](https://expo.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Express.js](https://img.shields.io/badge/Express.js-Backend-000000?logo=express&logoColor=white)](https://expressjs.com/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-Database-47A248?logo=mongodb&logoColor=white)](https://mongodb.com/)
-[![Google Gemini](https://img.shields.io/badge/GenAI-Gemini%203.6%20Flash-4285F4?logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Google Gemini](https://img.shields.io/badge/GenAI-Gemini%202.5%20Flash-4285F4?logo=google&logoColor=white)](https://deepmind.google/technologies/gemini/)
+[![Vector DB](https://img.shields.io/badge/Vector%20DB-ChromaDB%20%2B%20Cosine%20RAG-8B5CF6)](https://www.trychroma.com/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Strict%20(0%20errors)-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
 ---
 
 ## 🌟 Executive Summary
 
-**Navjivan × LastPuff** is an enterprise-grade, dual-profile wellness ecosystem tailored for the Indian demographic. It addresses two critical health frontiers:
+**Navjivan × LastPuff** is an enterprise-grade, full-stack SaaS wellness platform built specifically for the Indian demographic. Engineered from the ground up with solid dark elevation, strict micro-interactions, real MongoDB persistence, deterministic clinical decision engines, and RAG-grounded Gemini AI.
 
-1. **🚭 LastPuff (Smoker Profile)**: Evidence-based smoking cessation, live second-by-second smoke-free recovery ticker, 24/7 craving emergency SOS tools, 4-7-8 pranayama breathing pacer, 30-day stepdown protocol, disease risk radar, and crowd-sourced geofenced smoking danger zones.
-2. **⚡ Navjivan (Fitness & Wellness Profile)**: AI-periodized athletic conditioning (*Cricket, Running, Badminton, Kabaddi, Football*), **Padyatra** virtual Indian heritage pilgrimage step tracking (*Dandi March, Char Dham, Everest Trail*), Gemini Vision camera meal macro analyzer, and cognitive focus scripts.
-3. **🇮🇳 Swadeshi Gamification & SaaS**: 5-tier level progression system with redeemable vouchers for Indian wellness brands (*MuscleBlaze, The Whole Truth, Cult.fit, Khadi India, boAt Lifestyle*), and a 3-tier subscription paywall.
+1. **🚭 LastPuff (Clinical Cessation Track)**:
+   - Fagerström Tolerance Questionnaire with deterministic clinical dependence scoring (0–10)
+   - Cold Turkey vs. 30-Day Gradual Reduction recommendation engine with weekly task structures
+   - 24/7 SOS Craving Shield with 180s countdown and immediate cognitive disruption
+   - Interactive 4-7-8 Pranayama Breathing game with real-time SVG expansion visualizer
+   - Bubble Burst kinetic multi-touch distraction game with floating physics and XP rewards
+   - Daily cigarette counter with active stepper and live log persistence
+   - Actuarial Disease Risk Radar with pack-year exposure calculations and organ reversal timelines
+   - Geofencing Radar with Google Maps dark theme, custom trigger zone creation, and proximity detection
+
+2. **⚡ Navjivan (Athletic Conditioning & Vitality Track)**:
+   - 34-question fitness onboarding with cardiovascular safety screening
+   - Padyatra Virtual Pilgrimage across 3 historical trails (*Dandi Salt March*, *Golden Triangle*, *Kashi Corridor*)
+   - Real step synchronization, milestone unlock celebrations, and cultural dispatch cards
+   - Desi Macro & Nutrition Tracker with 1-tap Indian presets, AI meal analysis, and hydration stepper
+   - FitSquads community accountability groups with member limits, shared goals, and live join workflows
+
+3. **🤖 Agentic AI & RAG Copilot**:
+   - Live Gemini 2.5 Flash clinical copilot with vector retrieval over WHO Cessation Guidelines, 5-4-3-2-1 grounding, and withdrawal timelines
+   - Persistent chat history in MongoDB and local cache with action shortcut chips
+   - Weekly autonomous agent reviews and daily streak monitoring powered by `node-cron`
+   - Community Tribe feed with role-based filtering (All, Smokers, Fitness, Achievements) and optimistic likes
 
 ---
 
-## 📱 Dual-Profile Architecture
+## 🎨 Design System & Aesthetic Standards
+
+The platform strictly adheres to a **Solid Dark SaaS Aesthetic** with zero cheap glassmorphism or translucent cards:
+
+| Token Category | Specification |
+|---|---|
+| **Backgrounds** | `#0D0D14` (Deep Canvas), `#14141F` (Surface), `#1C1C2A` (Elevated Surface), `#242435` (High Elevation) |
+| **Borders** | `#2A2A3D` (Subtle 1px Borders), `#3A3A52` (Focused / Active Borders) |
+| **Smoker Palette** | `#10B981` (Emerald), `#34D399` (Light Emerald), `rgba(16, 185, 129, 0.12)` (Tint) |
+| **Fitness Palette** | `#8B5CF6` (Violet), `#A78BFA` (Light Violet), `rgba(139, 92, 246, 0.12)` (Tint) |
+| **Iconography** | Strictly `lucide-react-native` (24px headers/nav, 20px content) |
+| **Touch Targets** | 44×44px minimum touch targets across all interactive buttons |
+
+---
+
+## 📱 Architecture & User Flow
 
 ```mermaid
 graph TD
-    A[User Launch / Splash] --> B{Onboarding: Choose Path}
-    B -->|Smoker Profile| C[LastPuff Quit-Smoking Hub]
-    B -->|Non-Smoker Profile| D[Navjivan Fitness & Padyatra Hub]
+    A[Launch / Splash] --> B{Role Branching}
+    B -->|Smoker Path| C[5-Section Smoker Questionnaire]
+    B -->|Fitness Path| D[6-Section Fitness Questionnaire]
     
-    C --> C1[24/7 Red SOS Emergency + 4-7-8 Breathing]
-    C --> C2[Live Seconds & Rupee Ticker Engine]
-    C --> C3[30-Day Stepdown Protocol Generator]
-    C --> C4[AI Organ Disease Prognosis Radar]
-    C --> C5[Smoking Hotspot Geofencing Radar]
+    C --> E[Deterministic Cessation Scoring Engine]
+    D --> F[Athletic Safety & Metabolic Readiness Engine]
     
-    D --> D1[Padyatra Heritage Pilgrimage Trail]
-    D --> D2[Concentric Apple Fitness Style Rings]
-    D --> D3[AI Vision & 1-Tap Indian Meal Logger]
-    D --> D4[Athlete Sport Periodization Lab]
-    D --> D5[Mental Fitness & Focus Scripts]
+    E --> G[Plan Recommendation & Weekly Structure]
+    F --> G
     
-    C1 --> E[Shared Gamification: Swadeshi Store + Tribe Community + Gemini Copilot]
-    C2 --> E
-    C3 --> E
-    C4 --> E
-    C5 --> E
-    D1 --> E
-    D2 --> E
-    D3 --> E
-    D4 --> E
-    D5 --> E
+    G --> H[(Tabs) Role-Aware Navigation]
+    
+    H --> H1[Home: Real Recovery Ticker & Daily Tasks]
+    H --> H2[Quit Plan: Week Tasks & Cigarette Stepper]
+    H --> H3[SOS Mode: 180s Timer & Interventions]
+    H --> H4[Community Tribe & FitSquads]
+    H --> H5[Analytics & Biometric SVG Charts]
+    H --> H6[Profile & 3x3 Trophy Vault]
+    
+    H3 --> I[4-7-8 Breathing Game]
+    H3 --> J[Bubble Burst Kinetic Game]
+    H --> K[Gemini RAG Copilot Chatbot]
+    H --> L[Padyatra Heritage Pilgrimage]
+    H --> M[Disease Risk Actuarial Radar]
+    H --> N[Nutrition & Desi Macro Logger]
 ```
 
 ---
 
-## 🚀 Key Feature Modules
+## 🛠️ API & Endpoint Map
 
-### 1. 🚭 Smoker Profile (LastPuff)
-- **Live Recovery Ticker Engine (`LiveTimerTicker`)**: Real-time ticker counting smoke-free seconds (`02d : 14h : 38m : 42s`) with live rupee savings calculator, cigarettes avoided, and estimated life regained.
-- **24/7 Red SOS Craving Shield (`app/sos.tsx`)**:
-  - **🧘 Guided 4-7-8 Pranayama Breathing**: Physical spring expansion on 4s Inhale, 7s Hold, and 8s Exhale with rhythmic haptics.
-  - **🎚️ Craving Distress Slider (1-10)**: Ambient aura dynamically shifts from calming amber to emergency crimson.
-  - **🎮 Panic Distraction Mini-Games**: 60-second *Bubble Burst* (multi-touch popping physics + combo multiplier) and Zen *Focus Flow* pattern matching.
-  - **📞 Direct Lifeline**: Toll-free National Tobacco Quitline (`1800-11-2356`) + instant Guardian Emergency SMS alert (`expo-sms`).
-- **AI Disease Risk Analyzer (`app/disease-risk.tsx`)**: Pack-year calculations with 5 organ radial recovery meters (*COPD, Lung Cancer, Heart Disease, Stroke, PVD*).
-- **30-Day Stepdown Protocol (`app/quit-plan.tsx`)**: Daily cigarette caps, streak tracking, and Gemini AI quit plan generator.
+All endpoints are versioned under `/api/v1/*` with real database operations:
 
-### 2. ⚡ Fitness & Wellness Profile (Navjivan)
-- **🇮🇳 Padyatra Virtual Pilgrimage (`app/padyatra.tsx`)**: Pedometer-driven step tracking across historical routes (*Dandi Salt March (390 km)*, *Char Dham (1,200 km)*, *Everest Trail*) with interactive landmark pins and trivia cards.
-- **⭕ Concentric Health Rings (`ConcentricRings`)**: Triple-ring SVG visualizer tracking Daily Steps, Active Cardio minutes, and Hydration score.
-- **🥗 Nutrition & 1-Tap Indian Meal Scanner (`app/nutrition.tsx`)**: Point camera at any plate for Gemini Vision nutrient analysis or 1-tap log Indian dishes (*Paneer Tikka, Dal Tadka, Masala Dosa, Chicken Biryani*) + daily 3.0L water bottle tracker.
-- **🏋️ Athlete Performance Lab (`app/athlete-training.tsx`)**: Sport-specific periodization (*Cricket, Running, Badminton, Kabaddi, Football*) across Base, Power, and Agility phases.
-- **🧠 Mental Fitness & Focus (`app/mental-health.tsx`)**: AI confidence scripts, mood journal, and focus affirmations.
-
-### 3. 🤖 Live Agentic AI & Swadeshi Gamification
-- **Live Gemini 3.6 Flash Copilot (`app/chatbot.tsx`)**: 24/7 intelligent coach providing empathetic smoking cessation tactics or athletic periodization tips.
-- **Autonomous AI Goals Agent (`app/goals.tsx`)**: Synthesizes 3 personalized daily quests based on live user streak and recovery data.
-- **XP & 5-Tier Leveling**: Earn XP by resisting cravings, walking steps, completing workouts, and checking in.
-- **Brand Partner Store (`app/rewards/index.tsx`)**: Redeem XP for genuine discount vouchers with Indian brand partners (*MuscleBlaze, The Whole Truth, Cult.fit, Khadi India, boAt*).
-- **3-Tier SaaS Paywall (`app/subscription.tsx`)**: Free Starter, Navjivan Pro (₹299/mo), and Elite Clinical Concierge (₹699/mo).
-
----
-
-## 🏗️ Technical Architecture
-
-### Frontend Stack
-- **Framework**: React Native with Expo SDK 57 (Expo Router file-based navigation)
-- **Type Safety**: TypeScript Strict Mode (`npx tsc --noEmit` clean: 0 errors, 0 warnings)
-- **Styling**: Obsidian Dark Luxury palette (`#050508` OLED base, `#0E0E17` glass surface), specular highlights, and neon glow accents (`#00F5A0`, `#8B5CF6`)
-- **Animation**: `react-native-reanimated` (4.5.1) + `react-native-svg` custom charts
-- **Sensors & Native APIs**: `expo-sensors` (Pedometer), `expo-location` (Geofencing), `expo-image-picker` (Camera Vision), `expo-haptics`, `expo-sms`
-
-### Backend Stack
-- **Runtime**: Node.js (ES Modules `"type": "module"`) + Express.js
-- **Database**: MongoDB with Mongoose ODM (11 Schemas: `User`, `CravingLog`, `CigaretteLog`, `NutritionLog`, `StepLog`, `Goal`, `GeoHotspot`, `Reward`, `ChatMessage`, `Post`, `Comment`)
-- **AI Engine**: Provider-agnostic `aiService.js` powered by **Google Gemini 3.6 Flash** with in-memory response caching, rate-limiting, and 4-second timeout failover
-- **Security & Optimization**: Helmet headers, gzip compression, morgan logging, express-rate-limit
+| Module | Route | Methods | Description |
+|---|---|---|---|
+| **System** | `/api/v1/health` | `GET` | Health status, uptime, and MongoDB connection status |
+| **Auth** | `/api/v1/auth/signup` | `POST` | 2-step user registration with password hashing |
+| | `/api/v1/auth/login` | `POST` | User authentication & JWT issuance |
+| | `/api/v1/auth/me` | `GET` | Authenticated profile telemetry |
+| **Questionnaire** | `/api/v1/questionnaire/submit` | `POST` | Saves responses & updates user profile |
+| **Recommendation**| `/api/v1/recommendation/generate` | `POST` | Runs Fagerström clinical scoring & creates Plan |
+| **Plans** | `/api/v1/plan/current` | `GET` | Current active cessation or fitness protocol |
+| **Tasks** | `/api/v1/tasks/today` | `GET` | Today's action tasks with completion states |
+| | `/api/v1/tasks/week` | `GET` | Full week task schedule |
+| | `/api/v1/tasks/:id/complete` | `PUT` | Mark task completed and award XP |
+| **Progress** | `/api/v1/progress/stats` | `GET` | Recovery metrics, money saved, and streak |
+| | `/api/v1/progress/checkin` | `POST` | Daily check-in verification (+25 XP) |
+| | `/api/v1/progress/log-craving` | `POST` | Record craving intensity and outcome (+100 XP) |
+| | `/api/v1/progress/log-cigarettes` | `POST` | Log daily cigarette decrement |
+| **Chat (RAG)** | `/api/v1/chat/message` | `POST` | Gemini 2.5 Flash RAG query over knowledge base |
+| | `/api/v1/chat/history` | `GET`, `DELETE` | Retrieve or clear persistent message history |
+| **Community** | `/api/v1/community/posts` | `GET`, `POST` | Feed with userType/postType filters & post creation |
+| | `/api/v1/community/posts/:id/like` | `POST` | Toggle post like |
+| **FitSquads** | `/api/v1/fitsquad` | `GET`, `POST` | List public squads or create new tribe |
+| | `/api/v1/fitsquad/:id/join` | `POST` | Join an accountability tribe |
+| **Geofencing** | `/api/v1/geofencing/hotspots` | `GET`, `POST` | Proximity query ($near) for smoking hotspots |
+| | `/api/v1/geofencing/add-hotspot`| `POST` | Create custom trigger geofence |
+| **Padyatra** | `/api/v1/steps/sync` | `POST` | Sync steps and advance on heritage trails |
+| | `/api/v1/steps/padyatra` | `GET` | Route telemetry across Dandi, Golden Triangle, Kashi |
+| **Nutrition** | `/api/v1/nutrition/log` | `POST` | Log meals, macros, and water intake |
+| | `/api/v1/nutrition/today` | `GET` | Today's macro totals and meal breakdown |
+| **AI Intelligence**| `/api/v1/ai/disease-risk` | `POST` | Actuarial disease risk calculation via Gemini |
+| | `/api/v1/ai/daily-tip` | `GET` | Daily AI tip of the day |
+| | `/api/v1/ai/analyze-meal` | `POST` | Indian meal nutrient analysis |
 
 ---
 
-## 📦 Project Structure
-
-```
-navjivan-sih-project/
-├── lastpuff-backend/
-│   └── express-app/
-│       ├── controllers/       # 12 REST Controllers (Auth, AI, Goals, SOS, Nutrition, etc.)
-│       ├── middlewares/       # JWT Authentication & Multer upload middleware
-│       ├── models/            # 11 Mongoose Schemas (User, CravingLog, Goal, etc.)
-│       ├── routes/            # 13 Route Groups (/api/auth, /api/ai, /api/goals, etc.)
-│       ├── services/          # aiService.js (Gemini), notifications.js, cronJobs.js
-│       └── server.js          # Express server with rate limiting & security
-│
-└── lastpuff-frontend/
-    ├── app/
-    │   ├── (tabs)/            # Tabs: Home, Explore, Geofencing, Stats, Profile
-    │   ├── games/             # Bubble Burst & Zen Focus Flow mini-games
-    │   ├── onboarding/        # Dual-profile onboarding & specialized setup
-    │   ├── rewards/           # XP Leveling & Swadeshi Brand Store
-    │   ├── athlete-training   # Sport-specific periodization lab
-    │   ├── chatbot.tsx        # 24/7 Gemini Copilot
-    │   ├── disease-risk.tsx   # Pack-year organ recovery radar
-    │   ├── fitness-plans.tsx  # Interactive workout mode & rest timers
-    │   ├── goals.tsx          # Agentic AI daily missions & goal tracker
-    │   ├── mental-health.tsx  # Focus affirmations & mood tracker
-    │   ├── nutrition.tsx      # Gemini Vision meal scanner & water tracker
-    │   ├── padyatra.tsx       # Historical pilgrimage step tracker
-    │   ├── quit-plan.tsx      # 30-day stepdown quit protocol
-    │   ├── sos.tsx            # 24/7 Red SOS Craving Shield & 4-7-8 breathing
-    │   └── subscription.tsx   # 3-tier SaaS paywall
-    │
-    ├── components/ui/         # LiveTimerTicker, ConcentricRings, QuickActionDock, GlassCard
-    ├── constants/theme.ts     # Obsidian OLED design tokens & gradients
-    ├── context/               # AuthContext.tsx & UserContext.tsx
-    └── services/api.ts        # Typed Axios client with dynamic host discovery
-```
-
----
-
-## ⚡ Quick Start Guide
+## 🚀 Getting Started
 
 ### 1. Prerequisites
-- **Node.js**: v18.0.0 or newer
-- **Expo Go**: Installed on Android / iOS device
+- **Node.js**: v18.0 or higher
+- **MongoDB**: Local MongoDB or MongoDB Atlas URI
+- **Google Gemini API Key**: from [Google AI Studio](https://aistudio.google.com/)
+- **Expo CLI**: `npx expo`
 
-### 2. Start Backend API
+### 2. Environment Configuration
+Copy `.env.example` in both root and `lastpuff-backend/express-app/`:
 ```bash
-cd "lastpuff-backend/express-app"
-npm install
-npm run dev
-# API running on http://localhost:5000 (0.0.0.0)
+cp .env.example lastpuff-backend/express-app/.env
+```
+Ensure the following variables are configured:
+```env
+PORT=5000
+NODE_ENV=development
+MONGO_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/lastpuff?retryWrites=true&w=majority
+JWT_SECRET=your_jwt_secret_key_here
+JWT_REFRESH_SECRET=your_jwt_refresh_secret_key_here
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+CHROMA_URL=http://localhost:8000
+VECTOR_DB_PROVIDER=chroma
 ```
 
-### 3. Start Expo Frontend App
+### 3. Backend Execution
 ```bash
-cd "lastpuff-frontend"
+cd lastpuff-backend/express-app
+npm install
+node server.js
+```
+Verify backend health:
+```bash
+curl http://localhost:5000/api/v1/health
+# Returns: { "status": "ok", "db": "connected" }
+```
+
+### 4. Frontend Execution
+```bash
+cd lastpuff-frontend
 npm install
 npx expo start -c
 ```
-*Scan the terminal QR code using **Expo Go** on Android or the Camera app on iOS.*
+Press `w` for web, `a` for Android emulator, or scan the QR code with Expo Go on your mobile device.
+
+### 5. Type Safety Check
+```bash
+cd lastpuff-frontend
+npx tsc --noEmit
+# Must exit cleanly with 0 errors
+```
 
 ---
 
-## 📜 Documentation & References
-- **[API Documentation (API.md)](./API.md)**: Full REST endpoints specification.
-- **[Contributing Guidelines (CONTRIBUTING.md)](./CONTRIBUTING.md)**: Coding standards and workflow.
-
----
-
-## 🏆 Smart India Hackathon 2025
-*Crafted with passion for a healthier, smoke-free, and athletic India.*
+## 🛡️ License
+Built for Smart India Hackathon (SIH) 2025. Proprietary and Open for Healthcare Innovation.

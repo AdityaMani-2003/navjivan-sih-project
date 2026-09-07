@@ -98,6 +98,12 @@ export const updateProfile = (profileData: {
 export const refreshTokenApi = (refreshToken: string) =>
   API.post<any>("/api/auth/refresh-token", { refreshToken });
 
+export const getProfile = () =>
+  API.get<any>("/api/v1/profile");
+
+export const getGamificationStats = () =>
+  API.get<any>("/api/v1/gamification");
+
 export const deleteAccountApi = () =>
   API.delete<any>("/api/auth/account");
 
@@ -214,5 +220,15 @@ export const redeemStoreReward = (id: string) =>
 // ---------- NOTIFICATIONS ----------
 export const registerPushToken = (expoPushToken?: string, fcmToken?: string) =>
   API.post<any>("/api/notifications/register-token", { expoPushToken, fcmToken });
+
+// ---------- CHAT (RAG / GEMINI) ----------
+export const sendChatMessage = (content: string, sessionId = "default") =>
+  API.post<any>("/api/v1/chat/message", { content, sessionId });
+
+export const fetchChatHistory = (limit = 30) =>
+  API.get<any>(`/api/v1/chat/history?limit=${limit}`);
+
+export const clearChatHistory = () =>
+  API.delete<any>("/api/v1/chat/history");
 
 export default API;

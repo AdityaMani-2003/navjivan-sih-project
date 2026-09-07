@@ -1,182 +1,188 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AuthContext, UserType } from './AuthContext';
+import { getProfile } from '../services/api';
 
-// ─── Types ──────────────────────────────────────────────────
-export type UserType = 'smoker' | 'non-smoker';
+export { UserType };
 export type SubscriptionTier = 'free' | 'premium' | 'elite';
-export type QuitStrategy = 'cold_turkey' | 'gradual';
-export type FitnessGoal = 'weight_loss' | 'build_strength' | 'athlete' | 'general_wellness';
-export type FitnessLevel = 'beginner' | 'intermediate' | 'advanced';
-
-export interface SmokerProfile {
-  cigarettesPerDay: number;
-  yearsSmoking: number;
-  triggers: string[];
-  quitStrategy: QuitStrategy;
-  costPerPack: number;
-  quitDate: string | null;
-  previousAttempts: number;
-}
-
-export interface FitnessProfile {
-  goal: FitnessGoal;
-  level: FitnessLevel;
-  sport: string | null;
-  workoutDays: string[];
-  dietaryPref: string;
-}
-
-export interface Achievement {
-  id: string;
-  unlockedAt: string;
-}
+export type FitnessGoal = string;
+export type FitnessLevel = string;
+export type QuitStrategy = string;
 
 export interface UserProfile {
-  userType: UserType;
-  smokerProfile: SmokerProfile | null;
-  fitnessProfile: FitnessProfile | null;
+  _id: string;
+  name: string;
+  email: string;
+  userType: UserType | null;
+  age?: number;
+  gender?: string;
+  heightCm?: number;
+  weightKg?: number;
+  subscriptionTier: SubscriptionTier;
   xp: number;
   level: number;
-  achievements: Achievement[];
-  healthScore: number;
-  subscriptionTier: SubscriptionTier;
+  streak: number;
+  longestStreak?: number;
+  achievements: Array<{ id: string; unlockedAt: string }>;
+  daysSmokeFree?: number;
+  moneySaved?: number;
+  cigsAvoided?: number;
+  hoursLifeGained?: number;
+  activePlan?: any;
+  fitnessProfile?: any;
+  smokerProfile?: any;
+  healthScore?: number;
+  [key: string]: any;
 }
 
-// ─── Context Shape ──────────────────────────────────────────
 interface UserContextType {
-  userType: UserType | null;
   profile: UserProfile | null;
+  userType: UserType | null;
+  xp: number;
+  level: number;
+  streak: number;
+  subscriptionTier: SubscriptionTier;
+  achievements: Array<{ id: string; unlockedAt: string }>;
+  refreshProfile: () => Promise<void>;
+  addXP: (amount: number, reason?: string) => void;
   setUserType: (type: UserType) => Promise<void>;
-  setProfile: (profile: Partial<UserProfile>) => Promise<void>;
-  /** Check if user has a premium or elite subscription */
-  isPremium: boolean;
-  /** Reset profile (on logout) */
-  clearProfile: () => Promise<void>;
+  setProfile: React.Dispatch<React.SetStateAction<any>>;
   loading: boolean;
 }
 
 const defaultProfile: UserProfile = {
-  userType: 'smoker',
-  smokerProfile: null,
-  fitnessProfile: null,
+  _id: '',
+  name: 'User',
+  email: '',
+  userType: null,
+  subscriptionTier: 'free',
   xp: 0,
   level: 1,
+  streak: 0,
   achievements: [],
-  healthScore: 0,
-  subscriptionTier: 'free',
+  daysSmokeFree: 0,
+  moneySaved: 0,
+  cigsAvoided: 0,
+  hoursLifeGained: 0,
 };
 
-const UserContext = createContext<UserContextType>({
-  userType: null,
+export const UserContext = createContext<UserContextType>({
   profile: null,
+  userType: null,
+  xp: 0,
+  level: 1,
+  streak: 0,
+  subscriptionTier: 'free',
+  achievements: [],
+  refreshProfile: async () => {},
+  addXP: () => {},
   setUserType: async () => {},
-  setProfile: async () => {},
-  isPremium: false,
-  clearProfile: async () => {},
-  loading: true,
+  setProfile: () => {},
+  loading: false,
 });
 
-// ─── Storage Keys ───────────────────────────────────────────
-const STORAGE_KEY_USER_TYPE = '@lastpuff_user_type';
-const STORAGE_KEY_PROFILE = '@lastpuff_user_profile';
+export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const { user, isAuthenticated } = useContext(AuthContext);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
 
-// ─── Provider ───────────────────────────────────────────────
-export function UserProvider({ children }: { children: ReactNode }) {
-  const [userType, setUserTypeState] = useState<UserType | null>(null);
-  const [profile, setProfileState] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Load from storage on mount
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [storedType, storedProfile] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_KEY_USER_TYPE),
-          AsyncStorage.getItem(STORAGE_KEY_PROFILE),
-        ]);
-
-        if (storedType === 'smoker' || storedType === 'non-smoker') {
-          setUserTypeState(storedType);
-        }
-
-        if (storedProfile) {
-          try {
-            setProfileState(JSON.parse(storedProfile));
-          } catch {
-            // Corrupted data — ignore
-          }
-        }
-      } catch (err) {
-        console.error('UserContext: failed to load stored profile', err);
-      } finally {
-        setLoading(false);
+  const refreshProfile = async () => {
+    if (!isAuthenticated) return;
+    try {
+      setLoading(true);
+      const res = await getProfile();
+      if (res.data?.success && res.data?.data) {
+        const p = res.data.data;
+        setProfile((prev) => ({
+          ...(prev || defaultProfile),
+          ...p,
+        }));
+        await AsyncStorage.setItem('navjivan_user_profile', JSON.stringify(p));
       }
-    };
-    load();
-  }, []);
-
-  const setUserType = async (type: UserType) => {
-    setUserTypeState(type);
-    await AsyncStorage.setItem(STORAGE_KEY_USER_TYPE, type);
-
-    // Initialize profile if not already set
-    if (!profile) {
-      const newProfile: UserProfile = {
-        ...defaultProfile,
-        userType: type,
-      };
-      setProfileState(newProfile);
-      await AsyncStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(newProfile));
-    } else {
-      const updatedProfile = { ...profile, userType: type };
-      setProfileState(updatedProfile);
-      await AsyncStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(updatedProfile));
+    } catch {
+      // Offline fallback: load from storage
+      const cached = await AsyncStorage.getItem('navjivan_user_profile');
+      if (cached) {
+        try {
+          setProfile(JSON.parse(cached));
+        } catch {}
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
-  const setProfile = async (partial: Partial<UserProfile>) => {
-    const merged: UserProfile = {
-      ...(profile ?? defaultProfile),
-      ...partial,
-    };
-    setProfileState(merged);
-    await AsyncStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(merged));
+  useEffect(() => {
+    if (user) {
+      setProfile((prev) => ({
+        ...(prev || defaultProfile),
+        _id: user._id || '',
+        name: user.name || 'User',
+        email: user.email || '',
+        userType: (user.userType as UserType) || null,
+        xp: user.xp || 0,
+        level: user.level || 1,
+        streak: user.streak || 0,
+        subscriptionTier: user.subscriptionTier || 'free',
+        fitnessProfile: user.fitnessProfile,
+        smokerProfile: user.smokerProfile,
+      }));
+      refreshProfile();
+    } else {
+      setProfile(null);
+    }
+  }, [user, isAuthenticated]);
+
+  const addXP = (amount: number) => {
+    setProfile((prev) => {
+      if (!prev) return prev;
+      const newXP = (prev.xp || 0) + amount;
+      const newLevel =
+        newXP >= 7500
+          ? 5
+          : newXP >= 3500
+          ? 4
+          : newXP >= 1500
+          ? 3
+          : newXP >= 500
+          ? 2
+          : 1;
+      return {
+        ...prev,
+        xp: newXP,
+        level: newLevel,
+      };
+    });
   };
 
-  const clearProfile = async () => {
-    setUserTypeState(null);
-    setProfileState(null);
-    await AsyncStorage.multiRemove([STORAGE_KEY_USER_TYPE, STORAGE_KEY_PROFILE]);
+  const setUserType = async (type: UserType) => {
+    setProfile((prev) => (prev ? { ...prev, userType: type } : null));
+    await AsyncStorage.setItem('navjivan_user_type', type);
   };
-
-  const isPremium =
-    profile?.subscriptionTier === 'premium' ||
-    profile?.subscriptionTier === 'elite';
 
   return (
     <UserContext.Provider
       value={{
-        userType,
         profile,
+        userType: profile?.userType ?? (user?.userType as UserType) ?? null,
+        xp: profile?.xp ?? user?.xp ?? 0,
+        level: profile?.level ?? user?.level ?? 1,
+        streak: profile?.streak ?? user?.streak ?? 0,
+        subscriptionTier: profile?.subscriptionTier ?? 'free',
+        achievements: profile?.achievements ?? [],
+        refreshProfile,
+        addXP,
         setUserType,
         setProfile,
-        isPremium,
-        clearProfile,
         loading,
       }}
     >
       {children}
     </UserContext.Provider>
   );
-}
+};
 
-/** Hook to consume the UserContext */
-export function useUser() {
-  const ctx = useContext(UserContext);
-  if (!ctx) {
-    throw new Error('useUser must be used within a UserProvider');
-  }
-  return ctx;
-}
-
+export const useUser = () => useContext(UserContext);
 export default UserContext;

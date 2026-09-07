@@ -1,38 +1,41 @@
-import { Ionicons } from "@expo/vector-icons";
-import * as Location from "expo-location";
-// NOTE: expo-notifications is NOT imported statically because it throws
-// immediately in Expo Go SDK 53+. We use dynamic import() below instead.
-import * as TaskManager from "expo-task-manager";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   StyleSheet,
   Text,
-  TouchableOpacity,
+  Pressable,
   View,
-  ScrollView,
+  FlatList,
   Modal,
   TextInput,
   Dimensions,
 } from "react-native";
 import MapView, { Circle, Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import * as Haptics from "expo-haptics";
 import Toast from "react-native-toast-message";
-import { GEOFENCING_TASK_NAME } from "../../tasks/geofencingTask";
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from "../../constants/theme";
-import { fetchNearbyHotspots, reportHotspot } from "../../services/api";
+import {
+  MapPin,
+  ShieldAlert,
+  Plus,
+  Crosshair,
+  Map as MapIcon,
+  List as ListIcon,
+  X,
+  AlertTriangle,
+  Flame,
+} from "lucide-react-native";
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOW } from "../../constants/theme";
+import Button from "../../components/ui/Button";
+import Card from "../../components/ui/Card";
+import api from "../../services/api";
 
-// ------------------------------------------------
-// CONFIG
-// ------------------------------------------------
-const PRIMARY_COLOR = COLORS.primary; // Teal Green
-const BG_COLOR = COLORS.bg; // Dark Background
-const CARD_BG = COLORS.surface;
-const ASYNC_ZONES_KEY = "@geofence_zones";
+const { width } = Dimensions.get("window");
+const ASYNC_ZONES_KEY = "@navjivan_geofence_zones";
 
 interface GeofenceRegion {
   identifier: string;
@@ -40,490 +43,478 @@ interface GeofenceRegion {
   latitude: number;
   longitude: number;
   radius: number;
-  notifyOnEnter: boolean;
-  notifyOnExit: boolean;
+  type?: string;
 }
+
+const DARK_MAP_STYLE = [
+  { elementType: "geometry", stylers: [{ color: "#12121C" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#94A3B8" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#12121C" }] },
+  {
+    featureType: "administrative.locality",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#CBD5E1" }],
+  },
+  {
+    featureType: "poi",
+    elementType: "geometry",
+    stylers: [{ color: "#181826" }],
+  },
+  {
+    featureType: "poi",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#64748B" }],
+  },
+  {
+    featureType: "road",
+    elementType: "geometry",
+    stylers: [{ color: "#1E1E2E" }],
+  },
+  {
+    featureType: "road",
+    elementType: "geometry.stroke",
+    stylers: [{ color: "#2A2A3C" }],
+  },
+  {
+    featureType: "road.highway",
+    elementType: "geometry",
+    stylers: [{ color: "#2E2A4A" }],
+  },
+  {
+    featureType: "transit",
+    elementType: "geometry",
+    stylers: [{ color: "#181826" }],
+  },
+  {
+    featureType: "water",
+    elementType: "geometry",
+    stylers: [{ color: "#0D0D14" }],
+  },
+  {
+    featureType: "water",
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#475569" }],
+  },
+];
 
 export default function GeofencingScreen() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
   const [regions, setRegions] = useState<GeofenceRegion[]>([]);
-  const [isMonitoring, setIsMonitoring] = useState(false);
   const [activeTab, setActiveTab] = useState<"map" | "list">("map");
 
-  // Long-press modal for custom zone creation
-  const [addModalVisible, setAddModalVisible] = useState(false);
-  const [newZoneCoords, setNewZoneCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [newZoneName, setNewZoneName] = useState("");
-  const [newZoneRadius, setNewZoneRadius] = useState<number>(100);
+  // Modal for new zone
+  const [modalVisible, setModalVisible] = useState(false);
+  const [zoneCoords, setZoneCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [zoneName, setZoneName] = useState("");
+  const [zoneRadius, setZoneRadius] = useState(100);
+  const [submitting, setSubmitting] = useState(false);
 
   const mapRef = useRef<MapView>(null);
 
-  // Check if running in Expo Go (Bug 8)
+  // Check Expo Go environment
   const isExpoGo =
     Constants.appOwnership === "expo" ||
     Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
-  // 1. Initial Setup: Load permissions, zones, and status
+  // Initialize permissions & load saved hotspots
   useEffect(() => {
     (async () => {
-      // A. Load saved zones from AsyncStorage (Bug 4)
+      // 1. Load locally cached zones
       try {
-        const saved = await AsyncStorage.getItem(ASYNC_ZONES_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setRegions(parsed);
+        const cached = await AsyncStorage.getItem(ASYNC_ZONES_KEY);
+        if (cached) {
+          setRegions(JSON.parse(cached));
         }
       } catch (err) {
-        console.error("Failed to load saved geofence zones:", err);
+        console.warn("Error loading cached zones:", err);
       }
 
-      // B. Notifications Permission (dynamic import to avoid Expo Go crash)
-      if (!isExpoGo) {
-        try {
-          const Notifications = await import("expo-notifications");
-          const { status: notifStatus } = await Notifications.requestPermissionsAsync();
-          if (notifStatus !== "granted") {
-            console.warn("Notification permission not granted for geofencing");
-          }
-        } catch (err) {
-          console.warn("Notification permission request error:", err);
-        }
-      }
-
-      // C. Location Permissions (Foreground & Background)
+      // 2. Location permissions
       try {
-        const { status: foreStatus } = await Location.requestForegroundPermissionsAsync();
-        if (foreStatus !== "granted") {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
           setHasPermission(false);
           return;
         }
-
-        if (!isExpoGo) {
-          const { status: backStatus } = await Location.requestBackgroundPermissionsAsync();
-          if (backStatus !== "granted") {
-            console.log("Background location permission denied or restricted");
-          }
-        }
-
         setHasPermission(true);
 
-        // D. Get Current Location
-        const location = await Location.getCurrentPositionAsync({
+        const loc = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
-        setCurrentLocation(location);
+        setCurrentLocation(loc);
 
-        // E. Check if monitoring is active
-        const isRegistered = await TaskManager.isTaskRegisteredAsync(GEOFENCING_TASK_NAME);
-        setIsMonitoring(isRegistered);
+        // Fetch hotspots from server
+        fetchServerHotspots(loc.coords.latitude, loc.coords.longitude);
       } catch (err) {
-        console.warn("Location setup error:", err);
+        console.warn("Location error:", err);
         setHasPermission(false);
       }
     })();
   }, []);
 
-  // Save zones to AsyncStorage helper
-  const saveRegions = async (updated: GeofenceRegion[]) => {
-    setRegions(updated);
+  const fetchServerHotspots = async (lat: number, lng: number) => {
     try {
+      const res = await api.get(`/api/v1/geofencing/hotspots?lat=${lat}&lng=${lng}&radius=10000`);
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        const serverRegions: GeofenceRegion[] = res.data.data.map((h: any) => ({
+          identifier: h._id || String(Math.random()),
+          name: h.label || h.name || "Smoking Hotspot",
+          latitude: h.location?.coordinates ? h.location.coordinates[1] : h.latitude,
+          longitude: h.location?.coordinates ? h.location.coordinates[0] : h.longitude,
+          radius: h.radius || 100,
+          type: h.type || "smoking_zone",
+        }));
+
+        setRegions((prev) => {
+          // Merge unique identifiers
+          const map = new Map<string, GeofenceRegion>();
+          prev.forEach((r) => map.set(r.identifier, r));
+          serverRegions.forEach((r) => map.set(r.identifier, r));
+          const combined = Array.from(map.values());
+          AsyncStorage.setItem(ASYNC_ZONES_KEY, JSON.stringify(combined));
+          return combined;
+        });
+      }
+    } catch (err) {
+      console.warn("Failed to fetch server hotspots:", err);
+    }
+  };
+
+  const centerOnUser = () => {
+    if (currentLocation && mapRef.current) {
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch (_e) {}
+      mapRef.current.animateToRegion({
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015,
+      });
+    }
+  };
+
+  const handleMapLongPress = (e: any) => {
+    const coords = e.nativeEvent.coordinate;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (_e) {}
+    setZoneCoords(coords);
+    setZoneName("");
+    setZoneRadius(100);
+    setModalVisible(true);
+  };
+
+  const handleCreateZone = async () => {
+    if (!zoneCoords || !zoneName.trim()) {
+      Alert.alert("Required", "Please provide a name for this trigger zone.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await api.post("/api/v1/geofencing/add-hotspot", {
+        latitude: zoneCoords.latitude,
+        longitude: zoneCoords.longitude,
+        label: zoneName.trim(),
+        name: zoneName.trim(),
+        radius: zoneRadius,
+        type: "trigger_zone",
+      });
+
+      const newRegion: GeofenceRegion = {
+        identifier: res.data?.data?._id || `zone-${Date.now()}`,
+        name: zoneName.trim(),
+        latitude: zoneCoords.latitude,
+        longitude: zoneCoords.longitude,
+        radius: zoneRadius,
+        type: "trigger_zone",
+      };
+
+      const updated = [newRegion, ...regions];
+      setRegions(updated);
       await AsyncStorage.setItem(ASYNC_ZONES_KEY, JSON.stringify(updated));
-    } catch (e) {
-      console.error("Failed to save zones to storage:", e);
-    }
-  };
 
-  // 2. Add Geofence Region at Current Location
-  const addCurrentLocationGeofence = async () => {
-    if (!currentLocation) {
-      Toast.show({ type: "error", text1: "Locating your position..." });
-      return;
-    }
-    setNewZoneCoords({
-      latitude: currentLocation.coords.latitude,
-      longitude: currentLocation.coords.longitude,
-    });
-    setNewZoneName(`Trigger Zone ${regions.length + 1}`);
-    setNewZoneRadius(100);
-    setAddModalVisible(true);
-  };
-
-  // 3. Handle Map Long Press (Bug 6)
-  const handleMapLongPress = (coords: { latitude: number; longitude: number }) => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (e) {}
-    setNewZoneCoords(coords);
-    setNewZoneName(`Custom Zone ${regions.length + 1}`);
-    setNewZoneRadius(100);
-    setAddModalVisible(true);
-  };
-
-  // 4. Confirm Add Zone
-  const confirmAddZone = async () => {
-    if (!newZoneCoords) return;
-
-    const newRegion: GeofenceRegion = {
-      identifier: `zone_${Date.now()}`,
-      name: newZoneName.trim() || `Zone ${regions.length + 1}`,
-      latitude: newZoneCoords.latitude,
-      longitude: newZoneCoords.longitude,
-      radius: newZoneRadius,
-      notifyOnEnter: true,
-      notifyOnExit: true,
-    };
-
-    const updatedRegions = [...regions, newRegion];
-    await saveRegions(updatedRegions);
-    setAddModalVisible(false);
-
-    try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e) {}
-
-    Toast.show({
-      type: "success",
-      text1: "Trigger Zone Saved 📍",
-      text2: `${newRegion.name} (${newZoneRadius}m radius)`,
-    });
-
-    // If already monitoring, update active geofences
-    if (isMonitoring && !isExpoGo) {
       try {
-        await Location.startGeofencingAsync(GEOFENCING_TASK_NAME, updatedRegions);
-      } catch (err) {
-        console.warn("Failed to update active geofence monitoring:", err);
-      }
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (_e) {}
+
+      Toast.show({
+        type: "success",
+        text1: "Trigger Zone Added",
+        text2: `You will be alerted when within ${zoneRadius}m of ${zoneName.trim()}`,
+      });
+
+      setModalVisible(false);
+    } catch (err: any) {
+      console.warn("Failed to add hotspot:", err);
+      // Fallback locally
+      const fallbackRegion: GeofenceRegion = {
+        identifier: `local-${Date.now()}`,
+        name: zoneName.trim(),
+        latitude: zoneCoords.latitude,
+        longitude: zoneCoords.longitude,
+        radius: zoneRadius,
+        type: "trigger_zone",
+      };
+      const updated = [fallbackRegion, ...regions];
+      setRegions(updated);
+      await AsyncStorage.setItem(ASYNC_ZONES_KEY, JSON.stringify(updated));
+      setModalVisible(false);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  // 5. Delete Zone (Bug 5)
-  const deleteZone = async (zoneIdentifier: string) => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch (e) {}
-
-    const updated = regions.filter((r) => r.identifier !== zoneIdentifier);
-    await saveRegions(updated);
-
-    Toast.show({
-      type: "success",
-      text1: "Zone Deleted 🗑️",
-    });
-
-    // Update or stop geofencing task
-    if (isMonitoring && !isExpoGo) {
-      try {
-        if (updated.length > 0) {
-          await Location.startGeofencingAsync(GEOFENCING_TASK_NAME, updated);
-        } else {
-          await Location.stopGeofencingAsync(GEOFENCING_TASK_NAME);
-          setIsMonitoring(false);
-        }
-      } catch (err) {
-        console.warn("Error updating geofences after deletion:", err);
-      }
-    }
+  const handleDeleteZone = (id: string) => {
+    Alert.alert("Delete Zone", "Remove this craving trigger hotspot?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          const updated = regions.filter((r) => r.identifier !== id);
+          setRegions(updated);
+          await AsyncStorage.setItem(ASYNC_ZONES_KEY, JSON.stringify(updated));
+          try {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (_e) {}
+        },
+      },
+    ]);
   };
-
-  // 6. Toggle Monitoring
-  const toggleMonitoring = async () => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (e) {}
-
-    if (isExpoGo) {
-      Alert.alert(
-        "Expo Go Notice",
-        "Background task execution is disabled in Expo Go. To run real background geofencing, build with 'npx expo run:android' or EAS. Zone setup and foreground tracking work here!"
-      );
-      setIsMonitoring(!isMonitoring);
-      return;
-    }
-
-    try {
-      if (isMonitoring) {
-        await Location.stopGeofencingAsync(GEOFENCING_TASK_NAME);
-        setIsMonitoring(false);
-        Toast.show({
-          type: "success",
-          text1: "Monitoring Paused",
-          text2: "Background alerts disabled.",
-        });
-      } else {
-        if (regions.length === 0) {
-          Toast.show({
-            type: "error",
-            text1: "No Zones Configured",
-            text2: "Add at least one trigger zone first.",
-          });
-          return;
-        }
-        await Location.startGeofencingAsync(GEOFENCING_TASK_NAME, regions);
-        setIsMonitoring(true);
-        Toast.show({
-          type: "success",
-          text1: "Geofencing Active 🛡️",
-          text2: `Monitoring ${regions.length} trigger zones.`,
-        });
-      }
-    } catch (e: any) {
-      console.error("Geofencing toggle error:", e);
-      Alert.alert("Geofencing Notice", e.message || "Failed to toggle background geofencing.");
-    }
-  };
-
-  if (hasPermission === false) {
-    return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center", padding: 24 }]}>
-        <Ionicons name="location-outline" size={60} color="#FF3B30" style={{ marginBottom: 16 }} />
-        <Text style={{ color: "#FFFFFF", fontSize: 18, fontWeight: "700", textAlign: "center", marginBottom: 8 }}>
-          Location Permission Required
-        </Text>
-        <Text style={{ color: "#888888", textAlign: "center", lineHeight: 22, marginBottom: 20 }}>
-          LastPuff needs location access to alert you when entering areas where you usually smoke.
-        </Text>
-        <TouchableOpacity
-          style={styles.permissionBtn}
-          onPress={async () => {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            setHasPermission(status === "granted");
-          }}
-        >
-          <Text style={styles.permissionBtnText}>Grant Permission</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      {/* Top Bar */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>Trigger Zones</Text>
+          <Text style={styles.headerTitle}>Geofencing Radar</Text>
           <Text style={styles.headerSubtitle}>
-            {regions.length} {regions.length === 1 ? "zone" : "zones"} configured
+            {regions.length} Craving Hotspots Monitored
           </Text>
         </View>
 
-        <TouchableOpacity onPress={toggleMonitoring} style={styles.statusToggle}>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: isMonitoring ? PRIMARY_COLOR : "#222222" },
-            ]}
+        <View style={styles.tabToggle}>
+          <Pressable
+            onPress={() => setActiveTab("map")}
+            style={[styles.toggleBtn, activeTab === "map" && styles.toggleBtnActive]}
+            accessibilityRole="button"
           >
-            <View
-              style={[
-                styles.statusDot,
-                { backgroundColor: isMonitoring ? "#000000" : "#666666" },
-              ]}
-            />
-            <Text
-              style={[
-                styles.statusText,
-                { color: isMonitoring ? "#000000" : "#FFFFFF" },
-              ]}
-            >
-              {isMonitoring ? "ACTIVE" : "PAUSED"}
-            </Text>
-          </View>
-        </TouchableOpacity>
+            <MapIcon size={16} color={activeTab === "map" ? COLORS.textInverse : COLORS.textMuted} />
+          </Pressable>
+          <Pressable
+            onPress={() => setActiveTab("list")}
+            style={[styles.toggleBtn, activeTab === "list" && styles.toggleBtnActive]}
+            accessibilityRole="button"
+          >
+            <ListIcon size={16} color={activeTab === "list" ? COLORS.textInverse : COLORS.textMuted} />
+          </Pressable>
+        </View>
       </View>
 
-      {/* Expo Go Notice Banner (Bug 8) */}
-      {isExpoGo && (
-        <View style={styles.expoGoBanner}>
-          <Ionicons name="information-circle" size={18} color="#FFD700" />
-          <Text style={styles.expoGoText}>
-            Expo Go Mode: Interactive mapping & zones are active. Background alerts run natively in custom dev builds.
+      {/* Permission Warning Banner if needed */}
+      {hasPermission === false && (
+        <View style={styles.warningBanner}>
+          <AlertTriangle size={18} color={COLORS.warning} />
+          <Text style={styles.warningText}>
+            Location permission is required to detect nearby smoking trigger zones.
           </Text>
         </View>
       )}
 
-      {/* View Switcher Tabs */}
-      <View style={styles.tabSwitcher}>
-        <TouchableOpacity
-          style={[styles.switchTab, activeTab === "map" && styles.switchTabActive]}
-          onPress={() => setActiveTab("map")}
-        >
-          <Ionicons name="map-outline" size={16} color={activeTab === "map" ? "#000" : "#888"} />
-          <Text style={[styles.switchTabText, activeTab === "map" && styles.switchTabTextActive]}>
-            Map View
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.switchTab, activeTab === "list" && styles.switchTabActive]}
-          onPress={() => setActiveTab("list")}
-        >
-          <Ionicons name="list-outline" size={16} color={activeTab === "list" ? "#000" : "#888"} />
-          <Text style={[styles.switchTabText, activeTab === "list" && styles.switchTabTextActive]}>
-            Manage Zones ({regions.length})
-          </Text>
-        </TouchableOpacity>
-      </View>
-
+      {/* Main View */}
       {activeTab === "map" ? (
-        <View style={styles.mapWrapper}>
-          {currentLocation ? (
-            <MapView
-              ref={mapRef}
-              style={styles.map}
-              provider={PROVIDER_GOOGLE}
-              initialRegion={{
-                latitude: currentLocation.coords.latitude,
-                longitude: currentLocation.coords.longitude,
-                latitudeDelta: 0.012,
-                longitudeDelta: 0.012,
-              }}
-              showsUserLocation
-              showsMyLocationButton
-              customMapStyle={mapStyle}
-              onLongPress={(e) => handleMapLongPress(e.nativeEvent.coordinate)}
-            >
-              {regions.map((region) => (
-                <React.Fragment key={region.identifier}>
-                  <Marker
-                    coordinate={{
-                      latitude: region.latitude,
-                      longitude: region.longitude,
-                    }}
-                    title={region.name}
-                    description={`Radius: ${region.radius}m`}
-                    pinColor={PRIMARY_COLOR}
-                  />
-                  <Circle
-                    center={{
-                      latitude: region.latitude,
-                      longitude: region.longitude,
-                    }}
-                    radius={region.radius}
-                    strokeColor={PRIMARY_COLOR}
-                    strokeWidth={2}
-                    fillColor="rgba(57, 255, 20, 0.2)"
-                  />
-                </React.Fragment>
-              ))}
-            </MapView>
-          ) : (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={PRIMARY_COLOR} />
-              <Text style={{ color: "#FFFFFF", marginTop: 10 }}>Locating your GPS...</Text>
-            </View>
-          )}
+        <View style={styles.mapContainer}>
+          <MapView
+            ref={mapRef}
+            provider={PROVIDER_GOOGLE}
+            style={styles.map}
+            customMapStyle={DARK_MAP_STYLE}
+            initialRegion={{
+              latitude: currentLocation?.coords.latitude || 28.6139,
+              longitude: currentLocation?.coords.longitude || 77.209,
+              latitudeDelta: 0.04,
+              longitudeDelta: 0.04,
+            }}
+            showsUserLocation={true}
+            showsMyLocationButton={false}
+            onLongPress={handleMapLongPress}
+          >
+            {regions.map((region) => (
+              <React.Fragment key={region.identifier}>
+                <Circle
+                  center={{ latitude: region.latitude, longitude: region.longitude }}
+                  radius={region.radius}
+                  fillColor="rgba(239, 68, 68, 0.2)"
+                  strokeColor={COLORS.error}
+                  strokeWidth={2}
+                />
+                <Marker
+                  coordinate={{ latitude: region.latitude, longitude: region.longitude }}
+                  title={region.name}
+                  description={`Trigger Zone (${region.radius}m)`}
+                >
+                  <View style={styles.markerContainer}>
+                    <ShieldAlert size={20} color={COLORS.error} />
+                  </View>
+                </Marker>
+              </React.Fragment>
+            ))}
+          </MapView>
 
-          {/* Floating Map Hint */}
-          <View style={styles.mapHintBadge}>
-            <Ionicons name="finger-print-outline" size={16} color="#39FF14" />
-            <Text style={styles.mapHintText}>Long-press anywhere on map to add custom zone</Text>
+          {/* Floating Action Buttons */}
+          <View style={styles.floatingActions}>
+            <Pressable
+              onPress={centerOnUser}
+              style={styles.fabBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Center on current location"
+            >
+              <Crosshair size={22} color={COLORS.textPrimary} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                if (currentLocation) {
+                  setZoneCoords({
+                    latitude: currentLocation.coords.latitude,
+                    longitude: currentLocation.coords.longitude,
+                  });
+                  setZoneName("");
+                  setZoneRadius(100);
+                  setModalVisible(true);
+                } else {
+                  Alert.alert("Locating...", "Determining your current location.");
+                }
+              }}
+              style={[styles.fabBtn, { backgroundColor: COLORS.primary }]}
+              accessibilityRole="button"
+              accessibilityLabel="Add trigger zone at current spot"
+            >
+              <Plus size={22} color={COLORS.textInverse} />
+            </Pressable>
+          </View>
+
+          {/* Map Helper Bottom Note */}
+          <View style={styles.helperDrawer}>
+            <Flame size={16} color={COLORS.accent} />
+            <Text style={styles.helperText}>
+              Long-press anywhere on the map or tap '+' to mark a tea stall or smoking hotspot.
+            </Text>
           </View>
         </View>
       ) : (
-        /* List View */
-        <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
+        <View style={styles.listContainer}>
           {regions.length === 0 ? (
-            <View style={styles.emptyZonesContainer}>
-              <Text style={{ fontSize: 40, marginBottom: 12 }}>📍</Text>
-              <Text style={styles.emptyTitle}>No Trigger Zones Yet</Text>
-              <Text style={styles.emptySub}>
-                Add locations where you commonly experience cravings (e.g. tobacco shops, work break corners, parking spots).
+            <View style={styles.emptyList}>
+              <MapPin size={48} color={COLORS.textMuted} />
+              <Text style={styles.emptyTitle}>No Hotspots Added</Text>
+              <Text style={styles.emptyDesc}>
+                Mark local tea stalls, smoking corners, or bar areas to receive timely resistance
+                interventions.
               </Text>
             </View>
           ) : (
-            regions.map((region) => (
-              <View key={region.identifier} style={styles.zoneCard}>
-                <View style={styles.zoneIconBox}>
-                  <Ionicons name="location" size={24} color={PRIMARY_COLOR} />
-                </View>
-                <View style={styles.zoneDetails}>
-                  <Text style={styles.zoneCardName}>{region.name}</Text>
-                  <Text style={styles.zoneCardCoords}>
-                    Radius: {region.radius}m • Lat: {region.latitude.toFixed(4)}, Lng: {region.longitude.toFixed(4)}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => deleteZone(region.identifier)}
-                  style={styles.zoneDeleteBtn}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-                </TouchableOpacity>
-              </View>
-            ))
+            <FlatList
+              data={regions}
+              keyExtractor={(item) => item.identifier}
+              contentContainerStyle={{ padding: SPACING.lg, gap: SPACING.md }}
+              renderItem={({ item }) => (
+                <Card style={styles.zoneCard}>
+                  <View style={styles.zoneRow}>
+                    <View style={styles.zoneIconBox}>
+                      <ShieldAlert size={22} color={COLORS.error} />
+                    </View>
+                    <View style={styles.zoneInfo}>
+                      <Text style={styles.zoneName}>{item.name}</Text>
+                      <Text style={styles.zoneMeta}>
+                        {item.radius}m geofence • {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => handleDeleteZone(item.identifier)}
+                      style={styles.zoneDeleteBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete ${item.name}`}
+                    >
+                      <X size={18} color={COLORS.textMuted} />
+                    </Pressable>
+                  </View>
+                </Card>
+              )}
+            />
           )}
-        </ScrollView>
+        </View>
       )}
 
-      {/* Bottom Action Bar */}
-      <View style={styles.controls}>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={addCurrentLocationGeofence}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="navigate-circle" size={22} color="#000000" />
-          <Text style={styles.btnText}>Add Current Location as Zone</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Modal: Create Custom Zone (Bug 6) */}
-      <Modal visible={addModalVisible} transparent animationType="slide">
+      {/* Add Hotspot Modal */}
+      <Modal visible={modalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <Card style={styles.modalContent} elevation="high">
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Set Trigger Zone</Text>
-              <TouchableOpacity onPress={() => setAddModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Add Craving Trigger Zone</Text>
+              <Pressable
+                onPress={() => setModalVisible(false)}
+                style={styles.modalCloseBtn}
+                accessibilityRole="button"
+              >
+                <X size={20} color={COLORS.textSecondary} />
+              </Pressable>
             </View>
 
-            <Text style={styles.modalSub}>
-              Give this craving trigger zone a recognizable name:
-            </Text>
-
+            <Text style={styles.inputLabel}>ZONE NAME / TRIGGER</Text>
             <TextInput
               style={styles.modalInput}
-              value={newZoneName}
-              onChangeText={setNewZoneName}
-              placeholder="e.g. Office Balcony, Corner Pan Shop"
-              placeholderTextColor="#666"
+              placeholder="e.g. Office Chai Tapri, Corner Paan Shop"
+              placeholderTextColor={COLORS.textMuted}
+              value={zoneName}
+              onChangeText={setZoneName}
             />
 
-            <Text style={[styles.modalSub, { marginTop: 14, marginBottom: 8 }]}>
-              Protection Radius:
-            </Text>
-
-            <View style={styles.radiusRow}>
-              {[50, 100, 200].map((r) => (
-                <TouchableOpacity
+            <Text style={styles.inputLabel}>GEOFENCE RADIUS</Text>
+            <View style={styles.radiusSelector}>
+              {[50, 100, 200, 500].map((r) => (
+                <Pressable
                   key={r}
+                  onPress={() => setZoneRadius(r)}
                   style={[
-                    styles.radiusBtn,
-                    newZoneRadius === r && styles.radiusBtnActive,
+                    styles.radiusChip,
+                    zoneRadius === r && styles.radiusChipActive,
                   ]}
-                  onPress={() => setNewZoneRadius(r)}
+                  accessibilityRole="button"
                 >
                   <Text
                     style={[
-                      styles.radiusBtnText,
-                      newZoneRadius === r && styles.radiusBtnTextActive,
+                      styles.radiusChipText,
+                      zoneRadius === r && styles.radiusChipTextActive,
                     ]}
                   >
-                    {r} meters
+                    {r}m
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
 
-            <TouchableOpacity
-              style={styles.confirmSaveBtn}
-              onPress={confirmAddZone}
-            >
-              <Text style={styles.confirmSaveBtnText}>Save Zone</Text>
-            </TouchableOpacity>
-          </View>
+            <View style={styles.modalActions}>
+              <Button
+                title="Cancel"
+                variant="outline"
+                size="md"
+                onPress={() => setModalVisible(false)}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={submitting ? "Saving..." : "Save Zone"}
+                variant="primary"
+                size="md"
+                onPress={handleCreateZone}
+                disabled={submitting}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Card>
         </View>
       </Modal>
     </SafeAreaView>
@@ -533,314 +524,243 @@ export default function GeofencingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BG_COLOR,
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    justifyContent: "space-between",
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: "#1A1A1A",
+    borderBottomColor: COLORS.borderSubtle,
+    backgroundColor: COLORS.surface,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#FFFFFF",
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
   },
   headerSubtitle: {
-    fontSize: 12,
-    color: "#888888",
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
     marginTop: 2,
   },
-  statusToggle: {
-    padding: 2,
-  },
-  statusBadge: {
+  tabToggle: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: {
-    fontWeight: "800",
-    fontSize: 11,
-    letterSpacing: 0.5,
-  },
-  expoGoBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 215, 0, 0.12)",
-    borderColor: "#FFD700",
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: RADIUS.md,
+    padding: 3,
     borderWidth: 1,
-    marginHorizontal: 16,
-    marginTop: 8,
-    padding: 10,
-    borderRadius: 10,
-    gap: 8,
+    borderColor: COLORS.surfaceBorder,
   },
-  expoGoText: {
-    color: "#FFD700",
-    fontSize: 11,
-    flex: 1,
-    lineHeight: 15,
+  toggleBtn: {
+    width: 40,
+    height: 36,
+    borderRadius: RADIUS.sm,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  tabSwitcher: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 8,
-    gap: 10,
+  toggleBtnActive: {
+    backgroundColor: COLORS.primary,
   },
-  switchTab: {
+  warningBanner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: "#161616",
+    gap: SPACING.sm,
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(245, 158, 11, 0.3)",
   },
-  switchTabActive: {
-    backgroundColor: PRIMARY_COLOR,
-  },
-  switchTabText: {
-    color: "#888888",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  switchTabTextActive: {
-    color: "#000000",
-    fontWeight: "700",
-  },
-  mapWrapper: {
+  warningText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.warning,
     flex: 1,
-    marginHorizontal: 16,
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#222222",
+  },
+  mapContainer: {
+    flex: 1,
     position: "relative",
   },
   map: {
-    width: "100%",
-    height: "100%",
+    ...StyleSheet.absoluteFill,
   },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: "#121212",
-    justifyContent: "center",
+  markerContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.surface,
+    borderWidth: 2,
+    borderColor: COLORS.error,
     alignItems: "center",
+    justifyContent: "center",
+    ...SHADOW.md,
   },
-  mapHintBadge: {
+  floatingActions: {
     position: "absolute",
-    bottom: 12,
-    left: 12,
-    right: 12,
-    backgroundColor: "rgba(0,0,0,0.85)",
-    borderColor: PRIMARY_COLOR,
+    right: SPACING.lg,
+    bottom: 80,
+    gap: SPACING.md,
+  },
+  fabBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    borderColor: COLORS.surfaceBorder,
+    alignItems: "center",
+    justifyContent: "center",
+    ...SHADOW.md,
+  },
+  helperDrawer: {
+    position: "absolute",
+    bottom: SPACING.md,
+    left: SPACING.lg,
+    right: SPACING.lg,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: SPACING.sm,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+    ...SHADOW.sm,
   },
-  mapHintText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "600",
+  helperText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
     flex: 1,
   },
   listContainer: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 8,
+    backgroundColor: COLORS.background,
   },
-  emptyZonesContainer: {
+  emptyList: {
+    flex: 1,
     alignItems: "center",
-    paddingVertical: 60,
-    paddingHorizontal: 24,
+    justifyContent: "center",
+    paddingHorizontal: SPACING.xl,
   },
   emptyTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 6,
+    ...TYPOGRAPHY.h2,
+    color: COLORS.textPrimary,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
   },
-  emptySub: {
-    color: "#888888",
-    fontSize: 13,
+  emptyDesc: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
     textAlign: "center",
-    lineHeight: 18,
   },
   zoneCard: {
-    backgroundColor: CARD_BG,
-    borderColor: "#1E1E1E",
-    borderWidth: 1.5,
-    borderRadius: 14,
-    padding: 14,
+    padding: SPACING.md,
+  },
+  zoneRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
-    gap: 12,
+    gap: SPACING.md,
   },
   zoneIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: "rgba(57, 255, 20, 0.12)",
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
     alignItems: "center",
     justifyContent: "center",
   },
-  zoneDetails: {
+  zoneInfo: {
     flex: 1,
   },
-  zoneCardName: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 2,
+  zoneName: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
   },
-  zoneCardCoords: {
-    color: "#888888",
-    fontSize: 11,
+  zoneMeta: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
   zoneDeleteBtn: {
-    padding: 8,
-  },
-  controls: {
-    padding: 16,
-    backgroundColor: BG_COLOR,
-    borderTopWidth: 1,
-    borderTopColor: "#1A1A1A",
-  },
-  addButton: {
-    backgroundColor: PRIMARY_COLOR,
-    borderRadius: 14,
-    flexDirection: "row",
-    justifyContent: "center",
+    width: 44,
+    height: 44,
     alignItems: "center",
-    padding: 16,
-    gap: 8,
-  },
-  btnText: {
-    color: "#000000",
-    fontWeight: "800",
-    fontSize: 15,
-  },
-  permissionBtn: {
-    backgroundColor: PRIMARY_COLOR,
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 12,
-  },
-  permissionBtnText: {
-    color: "#000000",
-    fontWeight: "700",
-    fontSize: 15,
+    justifyContent: "center",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "flex-end",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: SPACING.lg,
   },
-  modalCard: {
-    backgroundColor: "#141414",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    borderTopWidth: 1,
-    borderTopColor: "#222",
+  modalContent: {
+    width: "100%",
+    padding: SPACING.lg,
   },
   modalHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    justifyContent: "space-between",
+    marginBottom: SPACING.lg,
   },
   modalTitle: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "800",
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
   },
-  modalSub: {
-    color: "#888888",
-    fontSize: 13,
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inputLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    letterSpacing: 1,
+    marginBottom: SPACING.xs,
   },
   modalInput: {
-    backgroundColor: "#1C1C1C",
-    color: "#FFFFFF",
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 15,
-    marginTop: 8,
-  },
-  radiusRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 24,
-  },
-  radiusBtn: {
-    flex: 1,
-    backgroundColor: "#1C1C1C",
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: RADIUS.md,
+    color: COLORS.textPrimary,
+    paddingHorizontal: SPACING.md,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+    marginBottom: SPACING.lg,
+    fontSize: 15,
+  },
+  radiusSelector: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    marginBottom: SPACING.xl,
+  },
+  radiusChip: {
+    flex: 1,
+    paddingVertical: 10,
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: RADIUS.md,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: COLORS.surfaceBorder,
   },
-  radiusBtnActive: {
-    backgroundColor: PRIMARY_COLOR,
-    borderColor: PRIMARY_COLOR,
+  radiusChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
-  radiusBtnText: {
-    color: "#888888",
-    fontWeight: "700",
-    fontSize: 13,
+  radiusChipText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    fontWeight: "600",
   },
-  radiusBtnTextActive: {
-    color: "#000000",
+  radiusChipTextActive: {
+    color: COLORS.textInverse,
   },
-  confirmSaveBtn: {
-    backgroundColor: PRIMARY_COLOR,
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: "center",
-  },
-  confirmSaveBtnText: {
-    color: "#000000",
-    fontWeight: "800",
-    fontSize: 16,
+  modalActions: {
+    flexDirection: "row",
+    gap: SPACING.md,
   },
 });
-
-// Dark Map Style JSON
-const mapStyle = [
-  { elementType: "geometry", stylers: [{ color: "#212121" }] },
-  { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#212121" }] },
-  { featureType: "administrative", elementType: "geometry", stylers: [{ color: "#757575" }] },
-  { featureType: "administrative.country", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#bdbdbd" }] },
-  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#181818" }] },
-  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#2c2c2c" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#8a8a8a" }] },
-  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#373737" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3c3c3c" }] },
-  { featureType: "transit", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#3d3d3d" }] },
-];

@@ -1,93 +1,102 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
-  StyleSheet,
-  ViewStyle,
-  StyleProp,
+  Animated,
   Pressable,
+  StyleProp,
+  StyleSheet,
   View,
+  ViewStyle,
 } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-} from 'react-native-reanimated';
+import { COLORS, RADIUS, SHADOW } from '../../constants/theme';
 
-interface CardProps {
+export interface CardProps {
   children: React.ReactNode;
-  variant?: 'default' | 'glow';
   style?: StyleProp<ViewStyle>;
   onPress?: () => void;
-  interactive?: boolean;
+  accent?: 'primary' | 'secondary' | 'danger';
+  elevation?: 'low' | 'medium' | 'high';
+  /**
+   * Legacy prop — gradient borders are BANNED per design system.
+   * Accepted here only for backward type compatibility and ignored.
+   */
+  gradientBorder?: boolean;
+  borderColors?: readonly [string, string, ...string[]] | string[];
+  testID?: string;
 }
 
 export const Card: React.FC<CardProps> = ({
   children,
-  variant = 'default',
   style,
   onPress,
-  interactive = !!onPress,
+  accent,
+  testID,
 }) => {
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: scale.value }],
-    };
-  });
+  const animatedOpacity = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
-    if (interactive) {
-      scale.value = withTiming(0.96, { duration: 100 });
-    }
+    Animated.timing(animatedOpacity, {
+      toValue: 0.85,
+      duration: 120,
+      useNativeDriver: true,
+    }).start();
   };
 
   const handlePressOut = () => {
-    if (interactive) {
-      scale.value = withTiming(1.0, { duration: 120 });
-    }
+    Animated.timing(animatedOpacity, {
+      toValue: 1,
+      duration: 160,
+      useNativeDriver: true,
+    }).start();
   };
 
-  const cardStyles = [
-    styles.base,
-    variant === 'glow' ? styles.glow : styles.default,
-    style,
-  ];
+  const accentColor =
+    accent === 'primary'
+      ? COLORS.primary
+      : accent === 'secondary'
+      ? COLORS.secondary
+      : accent === 'danger'
+      ? COLORS.danger
+      : undefined;
 
-  if (interactive || onPress) {
+  const cardContent = (
+    <View
+      style={[
+        styles.card,
+        accentColor ? { borderLeftColor: accentColor, borderLeftWidth: 3 } : null,
+        style,
+      ]}
+      testID={testID}
+    >
+      {children}
+    </View>
+  );
+
+  if (onPress) {
     return (
       <Pressable
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
+        accessibilityRole="button"
       >
-        <Animated.View style={[cardStyles, animatedStyle]}>
-          {children}
+        <Animated.View style={{ opacity: animatedOpacity }}>
+          {cardContent}
         </Animated.View>
       </Pressable>
     );
   }
 
-  return <View style={cardStyles}>{children}</View>;
+  return cardContent;
 };
 
 const styles = StyleSheet.create({
-  base: {
-    borderRadius: 16,
-    padding: 16,
-    backgroundColor: '#121212',
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: 20,
     borderWidth: 1,
-    borderColor: '#1E1E1E',
-  },
-  default: {
-    borderColor: '#222222',
-  },
-  glow: {
-    borderColor: '#39FF14',
-    shadowColor: '#39FF14',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    borderColor: COLORS.border,
+    ...SHADOW.md,
   },
 });
 

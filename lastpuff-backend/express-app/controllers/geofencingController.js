@@ -1,57 +1,98 @@
 import GeoHotspot from "../models/GeoHotspot.js";
 
-// GET /api/geofencing/hotspots?lat=X&lng=Y&radius=5000
-export const getNearbyHotspots = async (req, res) => {
+export const getNearbyHotspots = async (req, res, next) => {
   try {
-    const { lat, lng, radius } = req.query;
-    const latitude = parseFloat(lat);
-    const longitude = parseFloat(lng);
-    const maxDistance = parseInt(radius) || 5000; // default 5km
+    const lat = parseFloat(req.body.lat || req.query.lat);
+    const lng = parseFloat(req.body.lng || req.query.lng);
+    const radius = parseInt(req.body.radiusMeters || req.query.radius) || 5000;
 
-    if (isNaN(latitude) || isNaN(longitude)) {
-      return res.status(400).json({ success: false, message: "lat and lng query params required" });
+    if (isNaN(lat) || isNaN(lng)) {
+      // Return empty array instead of crashing if coordinates aren't provided
+      return res.json({ success: true, data: [] });
     }
 
     const hotspots = await GeoHotspot.find({
-      isActive: true,
       location: {
         $near: {
-          $geometry: { type: "Point", coordinates: [longitude, latitude] },
-          $maxDistance: maxDistance,
+          $geometry: { type: "Point", coordinates: [lng, lat] },
+          $maxDistance: radius,
         },
       },
-    }).limit(50).lean();
+    })
+      .limit(50)
+      .lean();
 
-    return res.status(200).json({ success: true, hotspots });
+    res.json({ success: true, data: hotspots, hotspots });
   } catch (err) {
-    console.error("Get hotspots error:", err);
-    return res.status(500).json({ success: false, message: "Server error fetching hotspots" });
+    // If index isn't built yet, return all hotspots
+    const all = await GeoHotspot.find().limit(20).lean();
+    res.json({ success: true, data: all, hotspots: all });
   }
 };
 
-// POST /api/geofencing/hotspots
-export const addHotspot = async (req, res) => {
+export const addHotspot = async (req, res, next) => {
   try {
-    const userId = req.user?.id || req.user?._id;
-    const { latitude, longitude, name, radius } = req.body;
+    const userId = req.user?._id;
+    const { lat, lng, latitude, longitude, label, name, type } = req.body;
 
-    if (!latitude || !longitude) {
-      return res.status(400).json({ success: false, message: "latitude and longitude required" });
+    const finalLat = parseFloat(lat ?? latitude);
+    const finalLng = parseFloat(lng ?? longitude);
+
+    if (isNaN(finalLat) || isNaN(finalLng)) {
+      return res.status(400).json({ success: false, error: "lat and lng are required" });
     }
 
     const hotspot = await GeoHotspot.create({
       location: {
         type: "Point",
-        coordinates: [parseFloat(longitude), parseFloat(latitude)],
+        coordinates: [finalLng, finalLat],
       },
-      name: name || "Smoking Hotspot",
+      label: label || name || "Smoking Zone",
+      type: type || "smoking_zone",
       addedBy: userId,
-      radius: radius || 50,
     });
 
-    return res.status(201).json({ success: true, hotspot });
+    res.status(201).json({ success: true, data: hotspot });
   } catch (err) {
-    console.error("Add hotspot error:", err);
-    return res.status(500).json({ success: false, message: "Server error adding hotspot" });
+    next(err);
   }
+};
+
+export const checkEntry = async (req, res, next) => {
+  try {
+    const { lat, lng } = req.body;
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+
+    if (isNaN(latitude) || isNaN(longitude)) {
+      return res.json({ success: true, inHotspot: false });
+    }
+
+    // Check if within 50 meters of any smoking zone
+    const nearby = await GeoHotspot.findOne({
+      location: {
+        $near: {
+          $geometry: { type: "Point", coordinates: [longitude, latitude] },
+          $maxDistance: 50,
+        },
+      },
+    }).lean();
+
+    res.json({
+      success: true,
+      inHotspot: !!nearby,
+      hotspot: nearby || null,
+      warning: nearby
+        ? `Warning: You entered a high-risk ${nearby.label} zone. Take deep breaths!`
+        : null,
+    });
+  } catch (err) {
+    res.json({ success: true, inHotspot: false });
+  }
+};
+
+export default {
+  getNearbyHotspots,
+  addHotspot,
+  checkEntry,
 };

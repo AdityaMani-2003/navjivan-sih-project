@@ -2,22 +2,17 @@ import mongoose from "mongoose";
 
 const mealSchema = new mongoose.Schema(
   {
-    name: { type: String, default: "Unnamed Meal" },
-    mealType: {
-      type: String,
-      enum: ["breakfast", "lunch", "dinner", "snack"],
-      default: "snack",
-    },
+    name: { type: String, required: true },
     calories: { type: Number, default: 0 },
     protein: { type: Number, default: 0 },
     carbs: { type: Number, default: 0 },
     fat: { type: Number, default: 0 },
     fiber: { type: Number, default: 0 },
-    imageUrl: { type: String, default: null },
-    time: { type: String, default: null }, // HH:MM
-    aiGenerated: { type: Boolean, default: false },
+    time: { type: String, default: "lunch" },
+    imageUrl: { type: String },
+    aiConfidence: { type: Number, default: 1.0 },
   },
-  { _id: true }
+  { _id: true, timestamps: true }
 );
 
 const nutritionLogSchema = new mongoose.Schema(
@@ -28,15 +23,24 @@ const nutritionLogSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    date: { type: String, required: true }, // YYYY-MM-DD
+    date: {
+      type: Date,
+      required: true,
+    },
     meals: [mealSchema],
-    waterGlasses: { type: Number, default: 0 },
-    calorieGoal: { type: Number, default: 2200 },
-    proteinGoal: { type: Number, default: 60 },
+    totalCalories: { type: Number, default: 0 },
+    totalProtein: { type: Number, default: 0 },
+    totalCarbs: { type: Number, default: 0 },
+    totalFat: { type: Number, default: 0 },
+    waterLitres: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
 
-nutritionLogSchema.index({ userId: 1, date: 1 }, { unique: true });
+nutritionLogSchema.index({ userId: 1, date: 1 });
 
-export default mongoose.model("NutritionLog", nutritionLogSchema);
+export const NutritionLog =
+  mongoose.models.NutritionLog ||
+  mongoose.model("NutritionLog", nutritionLogSchema);
+
+export default NutritionLog;

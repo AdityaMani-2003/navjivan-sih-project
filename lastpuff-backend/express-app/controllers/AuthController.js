@@ -205,19 +205,30 @@ export const refreshToken = async (req, res) => {
   }
 };
 
+export const getMe = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const user = await User.findById(userId).select("-passwordHash");
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    return res.status(200).json({ success: true, user });
+  } catch (err) {
+    console.error("GetMe error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const logout = async (req, res) => {
+  return res.status(200).json({ success: true, message: "Logged out successfully" });
+};
+
 export const deleteAccount = async (req, res) => {
   try {
     const userId = req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    await User.deleteOne({ _id: userId });
-
+    if (userId) await User.deleteOne({ _id: userId });
     return res.status(200).json({ success: true, message: "Account deleted successfully" });
   } catch (err) {
-    console.error("Delete account error:", err);
-    return res.status(500).json({ message: "Server error deleting account" });
+    return res.status(500).json({ success: false, message: "Server error deleting account" });
   }
 };

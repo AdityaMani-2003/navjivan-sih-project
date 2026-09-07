@@ -1,4 +1,3 @@
-// models/post.model.js
 import mongoose from "mongoose";
 
 const postSchema = new mongoose.Schema(
@@ -22,6 +21,26 @@ const postSchema = new mongoose.Schema(
         url: { type: String },
       },
     ],
+
+    // Community filter fields
+    userType: {
+      type: String,
+      enum: ["smoker", "non-smoker", "both"],
+      default: "both",
+      index: true,
+    },
+
+    postType: {
+      type: String,
+      enum: ["text", "achievement", "milestone", "challenge"],
+      default: "text",
+      index: true,
+    },
+
+    challengeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Goal",
+    },
 
     likes: [
       {
@@ -49,8 +68,12 @@ const postSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Optionally return virtuals when converting to JSON
+postSchema.index({ createdAt: -1 });
+postSchema.index({ userType: 1, createdAt: -1 });
+postSchema.index({ postType: 1, createdAt: -1 });
+
 postSchema.set("toJSON", { virtuals: true, versionKey: false });
 postSchema.set("toObject", { virtuals: true, versionKey: false });
 
-export const Post = mongoose.model("Post", postSchema);
+export const Post = mongoose.models.Post || mongoose.model("Post", postSchema);
+export default Post;

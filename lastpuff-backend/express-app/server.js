@@ -6,115 +6,146 @@ import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
+import mongoose from "mongoose";
 import { connectDB } from "./config/connectDB.js";
+import { globalErrorHandler } from "./middleware/errorHandler.js";
 
-// ─── Route Imports ──────────────────────────────────────────
-import authRoutes from "./routes/authRoutes.js";
-import dashboardRoutes from "./routes/dashboardRoutes.js";
-import postRoutes from "./routes/post.routes.js";
-import commentRoutes from "./routes/comment.routes.js";
+// ─── Route Imports (v1 Clean Architecture) ──────────────────────────────────
+import authV1Routes from "./routes/auth.routes.js";
+import profileV1Routes from "./routes/profile.routes.js";
+import questionnaireV1Routes from "./routes/questionnaire.routes.js";
+import recommendationV1Routes from "./routes/recommendation.routes.js";
+import planV1Routes from "./routes/plan.routes.js";
+import taskV1Routes from "./routes/task.routes.js";
+import progressV1Routes from "./routes/progress.routes.js";
+import chatV1Routes from "./routes/chat.routes.js";
+import communityV1Routes from "./routes/community.routes.js";
+import gamificationV1Routes from "./routes/gamification.routes.js";
+import geofencingV1Routes from "./routes/geofencing.routes.js";
+import nutritionV1Routes from "./routes/nutrition.routes.js";
+import stepsV1Routes from "./routes/steps.routes.js";
+import goalsV1Routes from "./routes/goals.routes.js";
+import rewardsV1Routes from "./routes/rewards.routes.js";
+import fitSquadV1Routes from "./routes/fitSquad.routes.js";
+import aiV1Routes from "./routes/ai.routes.js";
+
+// ─── Legacy Route Imports (Backward Compatibility) ──────────────────────────
+import authLegacyRoutes from "./routes/authRoutes.js";
+import dashboardLegacyRoutes from "./routes/dashboardRoutes.js";
 import sosRoutes from "./routes/sos.routes.js";
-import uploadTestRoutes from "./routes/uploadTest.routes.js";
-import aiRoutes from "./routes/aiRoutes.js";
-import geofencingRoutes from "./routes/geofencingRoutes.js";
-import nutritionRoutes from "./routes/nutritionRoutes.js";
-import stepsRoutes from "./routes/stepsRoutes.js";
-import goalsRoutes from "./routes/goalsRoutes.js";
-import rewardsRoutes from "./routes/rewardsRoutes.js";
+import commentRoutes from "./routes/comment.routes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 
-// ─── Cron Jobs ──────────────────────────────────────────────
+// ─── Cron Jobs ──────────────────────────────────────────────────────────────
 import { registerCronJobs } from "./services/cronJobs.js";
 
 const app = express();
 
-// ─── Security & Performance Middleware ──────────────────────
-app.use(helmet({ contentSecurityPolicy: false })); // CSP disabled for mobile API
+// ─── Security & Performance Middleware ──────────────────────────────────────
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
-app.use(cors());
-app.use(express.json({ limit: "10mb" })); // Increased for base64 image uploads
+app.use(
+  cors({
+    origin: "*",
+    credentials: true,
+  })
+);
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// ─── Request Logging ────────────────────────────────────────
 if (process.env.NODE_ENV !== "test") {
   app.use(morgan("dev"));
 }
 
-// ─── Rate Limiting ──────────────────────────────────────────
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+// ─── Rate Limiting ──────────────────────────────────────────────────────────
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, message: "Too many requests, please try again later." },
 });
 
 const aiLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 30, // 30 AI requests per hour
+  windowMs: 60 * 60 * 1000,
+  max: 60,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, message: "AI rate limit exceeded. Upgrade to Premium for more." },
+  message: { success: false, error: "AI rate limit exceeded. Try again shortly." },
 });
 
-app.use("/api/", generalLimiter);
-app.use("/api/ai/", aiLimiter);
+app.use("/api/", limiter);
+app.use("/api/v1/chat", aiLimiter);
+app.use("/api/v1/ai", aiLimiter);
 
-// ─── Database Connection ────────────────────────────────────
+// ─── Database Connection ────────────────────────────────────────────────────
 connectDB();
 
-// ─── Primary API Endpoints ──────────────────────────────────
-app.use("/api/auth", authRoutes);
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/posts", postRoutes);
+// ─── V1 REST API Endpoints ──────────────────────────────────────────────────
+app.use("/api/v1/auth", authV1Routes);
+app.use("/api/v1/profile", profileV1Routes);
+app.use("/api/v1/questionnaire", questionnaireV1Routes);
+app.use("/api/v1/recommendation", recommendationV1Routes);
+app.use("/api/v1/plans", planV1Routes);
+app.use("/api/v1/plan", planV1Routes);
+app.use("/api/v1/tasks", taskV1Routes);
+app.use("/api/v1/progress", progressV1Routes);
+app.use("/api/v1/chat", chatV1Routes);
+app.use("/api/v1/community", communityV1Routes);
+app.use("/api/v1/gamification", gamificationV1Routes);
+app.use("/api/v1/geofencing", geofencingV1Routes);
+app.use("/api/v1/nutrition", nutritionV1Routes);
+app.use("/api/v1/steps", stepsV1Routes);
+app.use("/api/v1/goals", goalsV1Routes);
+app.use("/api/v1/rewards", rewardsV1Routes);
+app.use("/api/v1/fitsquad", fitSquadV1Routes);
+app.use("/api/v1/ai", aiV1Routes);
+
+// ─── Legacy Endpoints (Backward Compatibility) ──────────────────────────────
+app.use("/api/auth", authLegacyRoutes);
+app.use("/api/dashboard", dashboardLegacyRoutes);
+app.use("/api/posts", communityV1Routes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/sos", sosRoutes);
-app.use("/api/upload-test", uploadTestRoutes);
-
-// ─── New SaaS API Endpoints ─────────────────────────────────
-app.use("/api/ai", aiRoutes);
-app.use("/api/geofencing", geofencingRoutes);
-app.use("/api/nutrition", nutritionRoutes);
-app.use("/api/steps", stepsRoutes);
-app.use("/api/goals", goalsRoutes);
-app.use("/api/rewards", rewardsRoutes);
+app.use("/api/ai", aiV1Routes);
+app.use("/api/geofencing", geofencingV1Routes);
+app.use("/api/nutrition", nutritionV1Routes);
+app.use("/api/steps", stepsV1Routes);
+app.use("/api/goals", goalsV1Routes);
+app.use("/api/rewards", rewardsV1Routes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/auth", authLegacyRoutes);
+app.use("/dashboard", dashboardLegacyRoutes);
 
-// ─── Fallback Aliases (backward compatibility) ──────────────
-app.use("/auth", authRoutes);
-app.use("/dashboard", dashboardRoutes);
+// ─── Health Checks ──────────────────────────────────────────────────────────
+app.get("/api/v1/health", (req, res) => {
+  res.json({
+    status: "ok",
+    uptime: Math.round(process.uptime()),
+    db: mongoose.connection.readyState === 1 ? "connected" : "connecting",
+    timestamp: new Date().toISOString(),
+  });
+});
 
-// ─── Health Check ───────────────────────────────────────────
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
-    app: "LastPuff API",
-    version: "2.0.0",
-    endpoints: [
-      "/api/auth", "/api/dashboard", "/api/posts", "/api/comments",
-      "/api/sos", "/api/ai", "/api/geofencing", "/api/nutrition",
-      "/api/steps", "/api/goals", "/api/rewards", "/api/notifications",
-    ],
+    app: "Navjivan API",
+    version: "3.0.0",
+    docs: "/api/v1",
+    db: mongoose.connection.readyState === 1 ? "connected" : "connecting",
   });
 });
 
-// ─── Global Error Handler ───────────────────────────────────
-app.use((err, _req, res, _next) => {
-  console.error("Unhandled error:", err);
-  res.status(500).json({
-    success: false,
-    message: process.env.NODE_ENV === "production"
-      ? "Internal server error"
-      : err.message,
-  });
-});
+// ─── Global Error Handler ───────────────────────────────────────────────────
+app.use(globalErrorHandler);
 
-// ─── Start Server ───────────────────────────────────────────
+// ─── Start Server ───────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 LastPuff API v2.0 running on port ${PORT}`);
-  console.log(`📡 Endpoints: /api/auth, /api/dashboard, /api/ai, /api/geofencing, /api/nutrition, /api/steps, /api/goals, /api/rewards, /api/notifications`);
+  console.log(`🚀 Navjivan SaaS API v3.0 running on port ${PORT}`);
+  console.log(`📡 Registered v1 routes: /api/v1/auth, /api/v1/profile, /api/v1/questionnaire, /api/v1/recommendation, /api/v1/plans, /api/v1/tasks, /api/v1/progress, /api/v1/chat, /api/v1/community, /api/v1/gamification, /api/v1/geofencing, /api/v1/nutrition, /api/v1/steps, /api/v1/goals, /api/v1/rewards, /api/v1/fitsquad, /api/v1/ai`);
 
-  // Register cron jobs
   registerCronJobs();
 });
+
+export default app;

@@ -1,79 +1,81 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS, TYPOGRAPHY, SPACING } from '../../constants/theme';
+import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { COLORS, TYPOGRAPHY } from '../../constants/theme';
+import Button from './Button';
 
-interface EmptyStateProps {
-  /** Ionicons icon name */
-  icon?: keyof typeof Ionicons.glyphMap;
-  /** Emoji to display instead of icon */
-  emoji?: string;
+export interface EmptyStateProps {
+  icon?: React.ReactNode;
   title: string;
-  message: string;
-  /** Optional action element (e.g. a button) */
-  action?: React.ReactNode;
-  style?: ViewStyle;
+  description: string;
+  action?: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
+  actionTitle?: string;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
 }
 
-export default function EmptyState({
+export const EmptyState: React.FC<EmptyStateProps> = ({
   icon,
-  emoji,
   title,
-  message,
+  description,
   action,
+  actionLabel,
+  onAction,
+  actionTitle,
   style,
-}: EmptyStateProps) {
+  testID,
+}) => {
+  const handleAction = action || onAction;
+  const label = actionLabel || actionTitle;
   return (
-    <View style={[styles.container, style]}>
-      {emoji ? (
-        <Text style={styles.emoji}>{emoji}</Text>
-      ) : icon ? (
-        <View style={styles.iconCircle}>
-          <Ionicons name={icon} size={36} color={COLORS.primary} />
-        </View>
-      ) : null}
-
+    <View style={[styles.container, style]} testID={testID}>
+      {icon && <View style={styles.iconWrapper}>{icon}</View>}
       <Text style={styles.title}>{title}</Text>
-      <Text style={styles.message}>{message}</Text>
-
-      {action && <View style={styles.actionContainer}>{action}</View>}
+      <Text style={styles.description}>{description}</Text>
+      {handleAction && label && (
+        <View style={styles.actionWrapper}>
+          <Button
+            title={label}
+            onPress={handleAction}
+            variant="primary"
+            size="md"
+          />
+        </View>
+      )}
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    paddingVertical: SPACING.xxl,
-    paddingHorizontal: SPACING.lg,
+    justifyContent: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    backgroundColor: 'transparent',
   },
-  iconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: COLORS.primaryGlow,
+  iconWrapper: {
+    marginBottom: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.md,
-  },
-  emoji: {
-    fontSize: 48,
-    marginBottom: SPACING.md,
   },
   title: {
-    ...TYPOGRAPHY.heading3,
+    ...TYPOGRAPHY.h3,
     color: COLORS.textPrimary,
     textAlign: 'center',
-    marginBottom: SPACING.xs,
+    marginBottom: 8,
   },
-  message: {
+  description: {
     ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
-    maxWidth: 280,
+    maxWidth: 300,
   },
-  actionContainer: {
-    marginTop: SPACING.lg,
+  actionWrapper: {
+    marginTop: 20,
   },
 });
+
+export default EmptyState;

@@ -8,22 +8,40 @@ const cravingLogSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    timestamp: { type: Date, default: Date.now },
-    resisted: { type: Boolean, default: true },
+    timestamp: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
     triggerType: {
       type: String,
-      enum: ["stress", "social", "boredom", "after_meals", "alcohol", "morning", "other"],
-      default: "other",
+      default: "general",
+    },
+    intensity: {
+      type: Number,
+      min: 1,
+      max: 5,
+      default: 3,
+    },
+    resisted: {
+      type: Boolean,
+      required: true,
     },
     interventionUsed: {
       type: String,
-      enum: ["breathing", "game", "quitline", "community", "emergency_contact", "none"],
-      default: "none",
+      default: "breathing_478",
     },
-    intensity: { type: Number, min: 1, max: 10, default: 5 },
-    notes: { type: String, default: "" },
+    durationMinutes: {
+      type: Number,
+      default: 3,
+    },
   },
   { timestamps: true }
 );
 
-export default mongoose.model("CravingLog", cravingLogSchema);
+cravingLogSchema.index({ userId: 1, timestamp: -1 });
+
+export const CravingLog =
+  mongoose.models.CravingLog || mongoose.model("CravingLog", cravingLogSchema);
+
+export default CravingLog;

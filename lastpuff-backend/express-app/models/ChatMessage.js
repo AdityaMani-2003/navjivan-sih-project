@@ -8,17 +8,40 @@ const chatMessageSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    sessionId: {
+      type: String,
+      default: "default",
+      index: true,
+    },
     role: {
       type: String,
       enum: ["user", "assistant"],
       required: true,
     },
-    content: { type: String, required: true },
+    content: {
+      type: String,
+      required: true,
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
+    },
+    contextUsed: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    tokensUsed: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
 
-// Keep only last 100 messages per user
-chatMessageSchema.index({ userId: 1, createdAt: -1 });
+chatMessageSchema.index({ userId: 1, timestamp: -1 });
+chatMessageSchema.index({ userId: 1, sessionId: 1 });
 
-export default mongoose.model("ChatMessage", chatMessageSchema);
+export const ChatMessage =
+  mongoose.models.ChatMessage || mongoose.model("ChatMessage", chatMessageSchema);
+
+export default ChatMessage;

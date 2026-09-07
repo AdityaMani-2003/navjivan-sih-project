@@ -1,294 +1,478 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  ScrollView,
+  Pressable,
+  FlatList,
   RefreshControl,
-  Image,
+  TextInput,
+  Modal,
   Dimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
-import GlassCard from '../../components/ui/GlassCard';
-import Badge from '../../components/ui/Badge';
-import SkeletonLoader from '../../components/ui/SkeletonLoader';
-import { fetchFeed, toggleLike, deletePost } from '../../services/posts';
-import { useAuth } from '../../context/AuthContext';
-import { useUser } from '../../context/UserContext';
+  ActivityIndicator,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import Toast from "react-native-toast-message";
+import {
+  Heart,
+  MessageCircle,
+  Share2,
+  Plus,
+  Users,
+  Trophy,
+  Sparkles,
+  Flame,
+  X,
+  ChevronRight,
+  ShieldCheck,
+  Award,
+} from "lucide-react-native";
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOW } from "../../constants/theme";
+import Card from "../../components/ui/Card";
+import Button from "../../components/ui/Button";
+import EmptyState from "../../components/ui/EmptyState";
+import { useUser } from "../../context/UserContext";
+import api from "../../services/api";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
-interface FitSquad {
-  id: string;
-  name: string;
-  location: string;
-  membersCount: number;
-  category: string;
-  icon: string;
-  joined?: boolean;
+interface PostItem {
+  _id: string;
+  author: {
+    _id: string;
+    name?: string;
+    email?: string;
+  };
+  content: string;
+  likes: string[];
+  commentsCount?: number;
+  createdAt: string;
+  userType?: "smoker" | "non-smoker";
+  postType?: "text" | "achievement" | "milestone" | "challenge";
+  isLiked?: boolean;
 }
 
-const FIT_SQUADS: FitSquad[] = [
-  { id: 'sq_1', name: 'Delhi Smoke-Free Warriors', location: 'NCR Region', membersCount: 1420, category: 'Smoke-Free', icon: 'shield-alt' },
-  { id: 'sq_2', name: 'Bengaluru Tech Runners & Coders', location: 'Bengaluru', membersCount: 2850, category: 'Running & Fitness', icon: 'running' },
-  { id: 'sq_3', name: 'Mumbai Sea-Face Calisthenics', location: 'Mumbai', membersCount: 980, category: 'Athletics', icon: 'dumbbell' },
-  { id: 'sq_4', name: 'Padyatra Heritage Walkers', location: 'Pan-India', membersCount: 3200, category: 'Pilgrimage', icon: 'hiking' },
-];
-
-const FEED_CHIPS = [
-  { id: 'all', name: 'All Feeds 🌐' },
-  { id: 'smoker', name: 'Smoke-Free 🚭' },
-  { id: 'fitness', name: 'Fitness & Health ⚡' },
-  { id: 'squads', name: 'FitSquad Groups 👥' },
+const TABS = [
+  { id: "all", label: "All Feeds" },
+  { id: "smoker", label: "Smokers" },
+  { id: "non-smoker", label: "Fitness" },
+  { id: "achievement", label: "Achievements" },
 ];
 
 export default function ExploreScreen() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { userType } = useUser();
-  const params = useLocalSearchParams();
+  const { userType, profile } = useUser();
 
-  const [activeChip, setActiveChip] = useState('all');
-  const [posts, setPosts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("all");
+  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [squads, setSquads] = useState<FitSquad[]>(FIT_SQUADS);
 
-  const loadPosts = async () => {
+  // Create post modal
+  const [modalVisible, setModalVisible] = useState(false);
+  const [postContent, setPostContent] = useState("");
+  const [selectedPostType, setSelectedPostType] = useState<"text" | "achievement" | "milestone">("text");
+  const [publishing, setPublishing] = useState(false);
+
+  const fetchPosts = useCallback(async (tab = activeTab) => {
     try {
-      setLoading(true);
-      const res = await fetchFeed();
-      if (res?.data?.posts) {
+      let query = "";
+      if (tab === "smoker" || tab === "non-smoker") {
+        query = `?userType=${tab}`;
+      } else if (tab === "achievement") {
+        query = `?postType=achievement`;
+      }
+
+      const res = await api.get(`/api/v1/community/posts${query}`);
+      if (res.data?.success && Array.isArray(res.data.posts)) {
         setPosts(res.data.posts);
       }
-    } catch (_err) {
-      // Demo posts if offline/mock
-      setPosts([
-        {
-          _id: 'p1',
-          authorName: 'Aditya Sharma',
-          content: 'Just hit 30 DAYS 100% Smoke-Free! My lung capacity during morning runs is night and day compared to last month. Keep resisting those 5-minute cravings, tribe! 🔥',
-          likes: ['u1', 'u2', 'u3', 'u4'],
-          commentsCount: 6,
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-          category: 'Smoke-Free',
-        },
-        {
-          _id: 'p2',
-          authorName: 'Sneha Patel',
-          content: 'Completed 45 km on the Dandi March Padyatra route this week! The virtual pilgrimage makes 10,000 steps effortless. 🇮🇳',
-          likes: ['u1', 'u2'],
-          commentsCount: 3,
-          createdAt: new Date(Date.now() - 7200000).toISOString(),
-          category: 'Fitness',
-        },
-      ]);
+    } catch (err) {
+      console.warn("Failed to fetch community posts:", err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchPosts(activeTab);
+  }, [activeTab, fetchPosts]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchPosts();
   };
 
-  useEffect(() => {
-    loadPosts();
-  }, [activeChip]);
+  const handleTabChange = (tabId: string) => {
+    try {
+      Haptics.selectionAsync();
+    } catch (_e) {}
+    setActiveTab(tabId);
+    setLoading(true);
+  };
 
-  useEffect(() => {
-    if (params.refresh === '1') {
-      loadPosts();
-    }
-  }, [params.refresh]);
-
-  const handleLike = async (postId: string) => {
+  const handleToggleLike = async (postId: string) => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      await toggleLike(postId);
-      loadPosts();
     } catch (_e) {}
+
+    // Optimistic UI update
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p._id === postId) {
+          const currentlyLiked = p.isLiked;
+          const currentCount = p.likes?.length || 0;
+          return {
+            ...p,
+            isLiked: !currentlyLiked,
+            likes: currentlyLiked
+              ? p.likes.slice(0, Math.max(0, currentCount - 1))
+              : [...(p.likes || []), "me"],
+          };
+        }
+        return p;
+      })
+    );
+
+    try {
+      await api.post(`/api/v1/community/posts/${postId}/like`);
+    } catch (err) {
+      console.warn("Failed to toggle like on server:", err);
+    }
   };
 
-  const handleJoinSquad = (squadId: string) => {
+  const handleCreatePost = async () => {
+    if (!postContent.trim()) {
+      Toast.show({ type: "error", text1: "Content Required", text2: "Please write something to share." });
+      return;
+    }
+
+    setPublishing(true);
     try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setSquads((current) =>
-        current.map((sq) => (sq.id === squadId ? { ...sq, joined: !sq.joined } : sq))
-      );
-      Toast.show({
-        type: 'success',
-        text1: 'Squad Updated! 👥',
-        text2: 'You are now connected with local peers.',
+      const res = await api.post("/api/v1/community/posts", {
+        content: postContent.trim(),
+        postType: selectedPostType,
+        userType: userType || "smoker",
       });
-    } catch (_e) {}
+
+      if (res.data?.success && res.data.post) {
+        const createdPost: PostItem = {
+          ...res.data.post,
+          author: {
+            _id: profile?._id || "me",
+            name: profile?.name || "Me",
+          },
+          likes: [],
+          isLiked: false,
+          commentsCount: 0,
+        };
+
+        setPosts((prev) => [createdPost, ...prev]);
+        setPostContent("");
+        setModalVisible(false);
+
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch (_e) {}
+
+        Toast.show({
+          type: "success",
+          text1: "Published!",
+          text2: "Your victory was shared with the community.",
+        });
+      }
+    } catch (err) {
+      console.warn("Create post error:", err);
+      Toast.show({ type: "error", text1: "Submission Failed", text2: "Could not publish post." });
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const formatTimeAgo = (dateStr: string) => {
+    try {
+      const diffMs = Date.now() - new Date(dateStr).getTime();
+      const mins = Math.floor(diffMs / (1000 * 60));
+      if (mins < 60) return `${Math.max(1, mins)}m ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      const days = Math.floor(hrs / 24);
+      return `${days}d ago`;
+    } catch (_e) {
+      return "recently";
+    }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Top Header */}
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Navjivan Tribe & Community</Text>
-          <Text style={styles.subTitle}>Inspire, conquer cravings & train together</Text>
+          <Text style={styles.headerTitle}>Community Tribe</Text>
+          <Text style={styles.headerSubtitle}>Shared Accountability & Triumphs</Text>
         </View>
-        <TouchableOpacity
-          style={styles.createBtn}
-          onPress={() => router.push('/community/CreatePost' as any)}
+
+        <Pressable
+          onPress={() => router.push("/fitsquad" as any)}
+          style={styles.squadsButton}
+          accessibilityRole="button"
+          accessibilityLabel="Open FitSquads"
         >
-          <Ionicons name="add" size={22} color={COLORS.bg} />
-        </TouchableOpacity>
+          <Users size={16} color={COLORS.primary} />
+          <Text style={styles.squadsBtnText}>FitSquads</Text>
+        </Pressable>
       </View>
 
-      {/* Filter Category Chips */}
-      <View style={styles.chipsContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsScroll}
-        >
-          {FEED_CHIPS.map((chip) => {
-            const isSelected = activeChip === chip.id;
+      {/* Filter Tabs */}
+      <View style={styles.tabsBar}>
+        {TABS.map((tab) => (
+          <Pressable
+            key={tab.id}
+            onPress={() => handleTabChange(tab.id)}
+            style={[styles.tabChip, activeTab === tab.id && styles.tabChipActive]}
+            accessibilityRole="button"
+          >
+            <Text
+              style={[
+                styles.tabChipText,
+                activeTab === tab.id && styles.tabChipTextActive,
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {/* Main List */}
+      {loading ? (
+        <View style={styles.centerLoading}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingLabel}>Loading community discussions...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={posts}
+          keyExtractor={(item) => item._id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+            />
+          }
+          ListHeaderComponent={
+            <Card
+              style={styles.bannerCard}
+              elevation="low"
+              onPress={() => router.push("/fitsquad" as any)}
+            >
+              <View style={styles.bannerRow}>
+                <View style={styles.bannerIconBox}>
+                  <Trophy size={24} color={COLORS.primary} />
+                </View>
+                <View style={styles.bannerText}>
+                  <Text style={styles.bannerTitle}>Join a FitSquad Tribe</Text>
+                  <Text style={styles.bannerDesc}>
+                    Compete in daily step challenges and smoke-free streaks with local warriors.
+                  </Text>
+                </View>
+                <ChevronRight size={20} color={COLORS.textMuted} />
+              </View>
+            </Card>
+          }
+          ListEmptyComponent={
+            <EmptyState
+              title="No Posts in this Tab"
+              description="Be the first to share an update, milestone, or craving victory with fellow warriors!"
+              icon={<Sparkles size={48} color={COLORS.primary} />}
+              actionTitle="Share a Victory"
+              onAction={() => setModalVisible(true)}
+              style={{ marginTop: SPACING.xl }}
+            />
+          }
+          renderItem={({ item }) => {
+            const authorName = item.author?.name || "Community Warrior";
+            const initials = authorName
+              .split(" ")
+              .map((n) => n[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase();
+            const isSmokerPost = item.userType !== "non-smoker";
+
             return (
-              <TouchableOpacity
-                key={chip.id}
-                style={[styles.chip, isSelected && styles.chipActive]}
-                onPress={() => {
-                  setActiveChip(chip.id);
-                  Haptics.selectionAsync();
-                }}
-              >
-                <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
-                  {chip.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+              <Card style={styles.postCard} elevation="medium">
+                {/* Author Info */}
+                <View style={styles.authorRow}>
+                  <View style={styles.avatarCircle}>
+                    <Text style={styles.avatarInitials}>{initials}</Text>
+                  </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              loadPosts();
-            }}
-            tintColor={COLORS.primary}
-          />
-        }
-      >
-        {/* FIT SQUAD GROUPS TAB */}
-        {activeChip === 'squads' ? (
-          <View style={styles.squadsList}>
-            {squads.map((sq) => (
-              <GlassCard key={sq.id} style={styles.squadCard} gradientBorder>
-                <View style={styles.squadHeader}>
-                  <View style={[styles.squadIconBox, { backgroundColor: COLORS.primaryGlow }]}>
-                    <FontAwesome5 name={sq.icon as any} size={20} color={COLORS.primary} />
+                  <View style={styles.authorMeta}>
+                    <View style={styles.authorTitleRow}>
+                      <Text style={styles.authorName}>{authorName}</Text>
+                      <View
+                        style={[
+                          styles.badgePill,
+                          {
+                            backgroundColor: isSmokerPost
+                              ? COLORS.primaryDim
+                              : COLORS.secondaryDim,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.badgePillText,
+                            {
+                              color: isSmokerPost
+                                ? COLORS.primary
+                                : COLORS.secondary,
+                            },
+                          ]}
+                        >
+                          {isSmokerPost ? "Smoke-Free" : "Fitness"}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.postTime}>{formatTimeAgo(item.createdAt)}</Text>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.squadName}>{sq.name}</Text>
-                    <Text style={styles.squadMeta}>
-                      📍 {sq.location} • {sq.membersCount.toLocaleString()} members
-                    </Text>
-                  </View>
-                  <Badge text={sq.category} variant="primary" size="sm" />
                 </View>
 
-                <TouchableOpacity
+                {/* Content */}
+                <Text style={styles.postBody}>{item.content}</Text>
+
+                {/* Interaction Footer */}
+                <View style={styles.postFooter}>
+                  <Pressable
+                    onPress={() => handleToggleLike(item._id)}
+                    style={styles.actionBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Like post. Currently ${item.likes?.length || 0} likes`}
+                  >
+                    <Heart
+                      size={18}
+                      color={item.isLiked ? COLORS.error : COLORS.textMuted}
+                      fill={item.isLiked ? COLORS.error : "transparent"}
+                    />
+                    <Text
+                      style={[
+                        styles.actionCount,
+                        item.isLiked && { color: COLORS.error, fontWeight: "700" },
+                      ]}
+                    >
+                      {item.likes?.length || 0}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.actionBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Comments"
+                  >
+                    <MessageCircle size={18} color={COLORS.textMuted} />
+                    <Text style={styles.actionCount}>{item.commentsCount || 0}</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.actionBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Share post"
+                  >
+                    <Share2 size={18} color={COLORS.textMuted} />
+                  </Pressable>
+                </View>
+              </Card>
+            );
+          }}
+        />
+      )}
+
+      {/* Floating Action Button */}
+      <Pressable
+        onPress={() => setModalVisible(true)}
+        style={styles.fab}
+        accessibilityRole="button"
+        accessibilityLabel="Create a new post"
+      >
+        <Plus size={26} color={COLORS.textInverse} />
+      </Pressable>
+
+      {/* Create Post Modal */}
+      <Modal visible={modalVisible} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <Card style={styles.createPostModal} elevation="high">
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Share with Tribe</Text>
+              <Pressable
+                onPress={() => setModalVisible(false)}
+                style={styles.modalClose}
+                accessibilityRole="button"
+              >
+                <X size={20} color={COLORS.textSecondary} />
+              </Pressable>
+            </View>
+
+            {/* Type selector */}
+            <View style={styles.typeSelectorRow}>
+              {(["text", "achievement", "milestone"] as const).map((t) => (
+                <Pressable
+                  key={t}
+                  onPress={() => setSelectedPostType(t)}
                   style={[
-                    styles.joinBtn,
-                    sq.joined && styles.joinedBtn,
+                    styles.typeChip,
+                    selectedPostType === t && styles.typeChipActive,
                   ]}
-                  onPress={() => handleJoinSquad(sq.id)}
+                  accessibilityRole="button"
                 >
-                  <Text style={[styles.joinBtnText, sq.joined && styles.joinedBtnText]}>
-                    {sq.joined ? 'Member ✓' : 'Join FitSquad +'}
+                  <Text
+                    style={[
+                      styles.typeChipText,
+                      selectedPostType === t && styles.typeChipTextActive,
+                    ]}
+                  >
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
                   </Text>
-                </TouchableOpacity>
-              </GlassCard>
-            ))}
-          </View>
-        ) : (
-          /* STANDARD COMMUNITY FEED POSTS */
-          <View style={styles.postsList}>
-            {loading && posts.length === 0 ? (
-              <SkeletonLoader width={width - 40} height={120} borderRadius={RADIUS.lg} />
-            ) : (
-              posts.map((post) => {
-                const isLiked = post.likes?.includes(user?._id || 'u1');
-                return (
-                  <GlassCard key={post._id} style={styles.postCard}>
-                    <View style={styles.postHeader}>
-                      <View style={styles.postAvatar}>
-                        <Text style={styles.postAvatarText}>
-                          {post.authorName ? post.authorName.charAt(0).toUpperCase() : 'U'}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.authorName}>{post.authorName || 'Navjivan Hero'}</Text>
-                        <Text style={styles.postTime}>
-                          {new Date(post.createdAt || Date.now()).toLocaleDateString()}
-                        </Text>
-                      </View>
-                      {post.category && (
-                        <Badge
-                          text={post.category}
-                          variant={post.category === 'Smoke-Free' ? 'primary' : 'secondary'}
-                          size="sm"
-                        />
-                      )}
-                    </View>
+                </Pressable>
+              ))}
+            </View>
 
-                    <Text style={styles.postContent}>{post.content}</Text>
+            <TextInput
+              style={styles.postTextInput}
+              placeholder="What craving did you beat or milestone did you hit today? Inspire the tribe..."
+              placeholderTextColor={COLORS.textMuted}
+              multiline
+              numberOfLines={5}
+              value={postContent}
+              onChangeText={setPostContent}
+            />
 
-                    {/* Post Actions Row */}
-                    <View style={styles.actionsRow}>
-                      <TouchableOpacity
-                        style={styles.actionItem}
-                        onPress={() => handleLike(post._id)}
-                      >
-                        <Ionicons
-                          name={isLiked ? 'heart' : 'heart-outline'}
-                          size={20}
-                          color={isLiked ? COLORS.danger : COLORS.textSecondary}
-                        />
-                        <Text style={[styles.actionText, isLiked && { color: COLORS.danger }]}>
-                          {post.likes?.length || 0}
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.actionItem}
-                        onPress={() =>
-                          router.push({
-                            pathname: '/community/Comments' as any,
-                            params: { postId: post._id },
-                          })
-                        }
-                      >
-                        <Ionicons name="chatbubble-outline" size={18} color={COLORS.textSecondary} />
-                        <Text style={styles.actionText}>{post.commentsCount || 0}</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity style={styles.actionItem}>
-                        <Ionicons name="share-social-outline" size={18} color={COLORS.textSecondary} />
-                      </TouchableOpacity>
-                    </View>
-                  </GlassCard>
-                );
-              })
-            )}
-          </View>
-        )}
-      </ScrollView>
+            <View style={styles.createModalActions}>
+              <Button
+                title="Cancel"
+                variant="outline"
+                size="md"
+                onPress={() => setModalVisible(false)}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={publishing ? "Publishing..." : "Publish Post"}
+                variant="primary"
+                size="md"
+                onPress={handleCreatePost}
+                disabled={publishing || !postContent.trim()}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Card>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -296,177 +480,275 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.background,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
+    paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.surfaceBorder,
+    borderBottomColor: COLORS.borderSubtle,
+    backgroundColor: COLORS.surface,
   },
-  title: {
-    ...TYPOGRAPHY.heading2,
-    fontSize: 20,
+  headerTitle: {
+    ...TYPOGRAPHY.h3,
     color: COLORS.textPrimary,
   },
-  subTitle: {
+  headerSubtitle: {
     ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
-  createBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipsContainer: {
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.surfaceBorder,
-  },
-  chipsScroll: {
-    paddingHorizontal: SPACING.lg,
-    gap: SPACING.xs + 2,
-  },
-  chip: {
+  squadsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 8,
+    borderRadius: RADIUS.full,
     backgroundColor: COLORS.surfaceElevated,
     borderWidth: 1,
     borderColor: COLORS.surfaceBorder,
-    borderRadius: RADIUS.full,
+  },
+  squadsBtnText: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.primary,
+    fontSize: 12,
+  },
+  tabsBar: {
+    flexDirection: "row",
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    gap: SPACING.sm,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderSubtle,
+  },
+  tabChip: {
     paddingHorizontal: SPACING.md,
     paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
   },
-  chipActive: {
-    backgroundColor: COLORS.primaryGlow,
+  tabChipActive: {
+    backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  chipText: {
+  tabChipText: {
+    ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "600",
   },
-  chipTextActive: {
-    color: COLORS.primary,
+  tabChipTextActive: {
+    color: COLORS.textInverse,
   },
-  scrollContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    paddingBottom: 60,
-  },
-  postsList: {
+  centerLoading: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
     gap: SPACING.md,
+  },
+  loadingLabel: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+  },
+  listContent: {
+    padding: SPACING.lg,
+    gap: SPACING.md,
+    paddingBottom: 90,
+  },
+  bannerCard: {
+    marginBottom: SPACING.sm,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  bannerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+  },
+  bannerIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primaryDim,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bannerText: {
+    flex: 1,
+  },
+  bannerTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
+  },
+  bannerDesc: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+    lineHeight: 16,
   },
   postCard: {
     padding: SPACING.md,
   },
-  postHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
+  authorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
     marginBottom: SPACING.sm,
   },
-  postAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: RADIUS.full,
+  avatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: COLORS.surfaceElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: 1,
     borderColor: COLORS.surfaceBorder,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  postAvatarText: {
+  avatarInitials: {
+    ...TYPOGRAPHY.label,
     color: COLORS.primary,
-    fontWeight: '800',
-    fontSize: 15,
+    fontWeight: "700",
+  },
+  authorMeta: {
+    flex: 1,
+  },
+  authorTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   authorName: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 14,
+    ...TYPOGRAPHY.bodyLarge,
+    fontWeight: "700",
     color: COLORS.textPrimary,
+  },
+  badgePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+  },
+  badgePillText: {
+    ...TYPOGRAPHY.caption,
+    fontSize: 10,
+    fontWeight: "700",
   },
   postTime: {
     ...TYPOGRAPHY.caption,
-    fontSize: 10,
     color: COLORS.textMuted,
+    marginTop: 2,
   },
-  postContent: {
+  postBody: {
     ...TYPOGRAPHY.body,
-    fontSize: 14,
     color: COLORS.textPrimary,
-    lineHeight: 20,
+    lineHeight: 22,
     marginBottom: SPACING.md,
   },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: SPACING.lg,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.surfaceBorder,
+  postFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xl,
     paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderSubtle,
   },
-  actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
+    paddingVertical: 4,
   },
-  actionText: {
+  actionCount: {
+    ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
-  squadsList: {
-    gap: SPACING.md,
+  fab: {
+    position: "absolute",
+    right: SPACING.lg,
+    bottom: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    ...SHADOW.lg,
   },
-  squadCard: {
-    padding: SPACING.md,
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "flex-end",
   },
-  squadHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  createPostModal: {
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    padding: SPACING.lg,
+    backgroundColor: COLORS.surface,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.md,
+  },
+  modalTitle: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.textPrimary,
+  },
+  modalClose: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  typeSelectorRow: {
+    flexDirection: "row",
     gap: SPACING.sm,
     marginBottom: SPACING.md,
   },
-  squadIconBox: {
-    width: 44,
-    height: 44,
+  typeChip: {
+    flex: 1,
+    paddingVertical: 8,
     borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  squadName: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 15,
-    color: COLORS.textPrimary,
-  },
-  squadMeta: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  joinBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.md,
-    paddingVertical: SPACING.sm,
-    alignItems: 'center',
-  },
-  joinedBtn: {
     backgroundColor: COLORS.surfaceElevated,
+    alignItems: "center",
     borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  typeChipActive: {
+    backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  joinBtnText: {
-    color: COLORS.bg,
-    fontWeight: '800',
-    fontSize: 13,
+  typeChipText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    fontWeight: "600",
   },
-  joinedBtnText: {
-    color: COLORS.primary,
+  typeChipTextActive: {
+    color: COLORS.textInverse,
+  },
+  postTextInput: {
+    backgroundColor: COLORS.surfaceElevated,
+    color: COLORS.textPrimary,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+    minHeight: 120,
+    textAlignVertical: "top",
+    marginBottom: SPACING.lg,
+  },
+  createModalActions: {
+    flexDirection: "row",
+    gap: SPACING.md,
   },
 });

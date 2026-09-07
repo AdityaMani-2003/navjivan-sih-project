@@ -1,289 +1,417 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   Switch,
-  Modal,
   Alert,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
-import GlassCard from '../../components/ui/GlassCard';
-import GradientButton from '../../components/ui/GradientButton';
-import ProgressRing from '../../components/ui/ProgressRing';
-import Badge from '../../components/ui/Badge';
-import SectionHeader from '../../components/ui/SectionHeader';
-import { useAuth } from '../../context/AuthContext';
-import { useUser } from '../../context/UserContext';
-import { fetchDashboardAnalytics, deleteAccountApi } from '../../services/api';
+  RefreshControl,
+  ActivityIndicator,
+  Dimensions,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import Toast from "react-native-toast-message";
+import {
+  User as UserIcon,
+  Flame,
+  Award,
+  Settings,
+  Bell,
+  Shield,
+  LogOut,
+  ChevronRight,
+  Sparkles,
+  Lock,
+  CheckCircle2,
+  Calendar,
+  Zap,
+  HelpCircle,
+  RefreshCw,
+} from "lucide-react-native";
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOW } from "../../constants/theme";
+import Card from "../../components/ui/Card";
+import Button from "../../components/ui/Button";
+import ProgressBar from "../../components/ui/ProgressBar";
+import { useAuth } from "../../context/AuthContext";
+import { useUser } from "../../context/UserContext";
+import api from "../../services/api";
+
+const { width } = Dimensions.get("window");
+
+interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  unlocked: boolean;
+  xpReward: number;
+}
+
+const DEFAULT_ACHIEVEMENTS: Achievement[] = [
+  { id: "a1", title: "First Step", description: "Resist your first craving or log first meal", unlocked: true, xpReward: 50 },
+  { id: "a2", title: "3-Day Warrior", description: "Maintain a 3-day continuous check-in streak", unlocked: true, xpReward: 100 },
+  { id: "a3", title: "Zen Master", description: "Complete 3 cycles of 4-7-8 deep breathing", unlocked: true, xpReward: 75 },
+  { id: "a4", title: "Padyatra Trekker", description: "Log 10,000 steps on any heritage route", unlocked: false, xpReward: 150 },
+  { id: "a5", title: "Clean Smoke-Free Week", description: "7 full days with 0 cigarettes smoked", unlocked: false, xpReward: 300 },
+  { id: "a6", title: "Tribe Champion", description: "Join a FitSquad and complete a challenge", unlocked: false, xpReward: 200 },
+];
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { userType, setUserType, profile } = useUser();
+  const { userType, setUserType, profile, xp, level, streak, addXP } = useUser();
 
-  const [stats, setStats] = useState({
-    streak: user?.streak || 4,
-    totalCigarettesAvoided: 48,
-    totalMoneySaved: 600,
-    totalCravingsHandled: 9,
-    goalsCompleted: 12,
-  });
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [achievements, setAchievements] = useState<Achievement[]>(DEFAULT_ACHIEVEMENTS);
+  const [notifEnabled, setNotifEnabled] = useState(true);
+  const [checkedInToday, setCheckedInToday] = useState(false);
 
-  const [notifDaily, setNotifDaily] = useState(true);
-  const [notifSos, setNotifSos] = useState(true);
-  const [healthScore, setHealthScore] = useState(82);
-
-  useEffect(() => {
-    const loadStats = async () => {
-      try {
-        const res = await fetchDashboardAnalytics();
-        if (res?.data?.allTime) {
-          setStats((prev) => ({
-            ...prev,
-            totalCigarettesAvoided: res.data.allTime.totalCigarettesAvoided || prev.totalCigarettesAvoided,
-            totalMoneySaved: res.data.allTime.totalMoneySaved || prev.totalMoneySaved,
-            totalCravingsHandled: res.data.allTime.totalCravingsHandled || prev.totalCravingsHandled,
-          }));
-        }
-      } catch (_e) {}
-    };
-    loadStats();
+  const fetchProfileData = useCallback(async () => {
+    try {
+      const res = await api.get("/api/v1/gamification/achievements");
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        setAchievements(res.data.data);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch achievements:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
-  const handleToggleUserType = async () => {
+  useEffect(() => {
+    fetchProfileData();
+  }, [fetchProfileData]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchProfileData();
+  };
+
+  const handleDailyCheckIn = async () => {
+    if (checkedInToday) {
+      Toast.show({ type: "info", text1: "Already Checked In", text2: "Come back tomorrow for your next streak bonus!" });
+      return;
+    }
+
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const newType = userType === 'smoker' ? 'non-smoker' : 'smoker';
-      await setUserType(newType);
-      Toast.show({
-        type: 'success',
-        text1: `Switched to ${newType === 'smoker' ? 'Smoke-Free' : 'Fitness'} Mode! 🔄`,
-        text2: 'Dashboard tools adapted to your selection.',
-      });
     } catch (_e) {}
+
+    setCheckedInToday(true);
+    addXP(25);
+
+    try {
+      const res = await api.post("/api/v1/progress/checkin");
+      if (res.data?.success) {
+        Toast.show({
+          type: "success",
+          text1: "Daily Streak Verified! 🔥",
+          text2: `+25 XP awarded! Current streak: ${res.data.data?.streak || streak + 1} days.`,
+        });
+      }
+    } catch (err) {
+      console.warn("Check-in error:", err);
+      Toast.show({ type: "success", text1: "Checked In!", text2: "+25 XP logged to recovery bank." });
+    }
+  };
+
+  const handleToggleUserType = () => {
+    const newType = userType === "smoker" ? "non-smoker" : "smoker";
+    Alert.alert(
+      "Switch Journey Mode",
+      `Switch your dashboard to ${newType === "smoker" ? "Smoke-Free Cessation" : "Physical Conditioning & Fitness"}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Switch Mode",
+          onPress: async () => {
+            try {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              await setUserType(newType);
+              Toast.show({
+                type: "success",
+                text1: `Mode Switched! 🔄`,
+                text2: `You are now on the ${newType === "smoker" ? "Smoke-Free" : "Fitness"} track.`,
+              });
+            } catch (_e) {}
+          },
+        },
+      ]
+    );
   };
 
   const handleLogout = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out of Navjivan?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("Sign Out", "Are you sure you want to sign out of Navjivan?", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: 'Sign Out',
-        style: 'destructive',
+        text: "Sign Out",
+        style: "destructive",
         onPress: async () => {
-          await logout();
-          router.replace('/auth/login' as any);
+          try {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            await logout();
+            router.replace("/auth/login" as any);
+          } catch (_e) {}
         },
       },
     ]);
   };
 
+  const userName = profile?.name || user?.name || "Navjivan Warrior";
+  const userEmail = profile?.email || user?.email || "warrior@navjivan.app";
+  const initials = userName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  const xpCurrent = xp || 0;
+  const xpForNext = 500;
+  const xpProgress = Math.min(1, (xpCurrent % xpForNext) / xpForNext);
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      {/* Top Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Account & Health Profile</Text>
-        <TouchableOpacity
-          style={styles.settingsBtn}
-          onPress={() => router.push('/subscription' as any)}
-        >
-          <Ionicons name="sparkles" size={18} color={COLORS.accent} />
-          <Text style={styles.proText}>SaaS Pro</Text>
-        </TouchableOpacity>
+        <View>
+          <Text style={styles.headerTitle}>Account & Profile</Text>
+          <Text style={styles.headerSubtitle}>Identity, Trophies & Settings</Text>
+        </View>
+
+        <View style={styles.badgePro}>
+          <Sparkles size={14} color={COLORS.accent} />
+          <Text style={styles.badgeProText}>FREE TIER</Text>
+        </View>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.primary}
+          />
+        }
       >
-        {/* User Hero Card */}
-        <GlassCard style={styles.userCard} gradientBorder borderColors={COLORS.gradientPrimary}>
-          <View style={styles.userRow}>
-            <View style={styles.avatarBox}>
-              <Text style={styles.avatarText}>
-                {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
-              </Text>
+        {/* Profile Identity Card */}
+        <Card style={styles.profileHeroCard} elevation="medium">
+          <View style={styles.profileRow}>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarText}>{initials}</Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.userName}>{user?.name || 'Navjivan Pioneer'}</Text>
-              <Text style={styles.userEmail}>{user?.email || 'user@navjivan.app'}</Text>
-              <View style={styles.badgeRow}>
-                <Badge
-                  text={userType === 'non-smoker' ? 'Fitness Explorer' : 'Smoke-Free Hero'}
-                  variant={userType === 'non-smoker' ? 'secondary' : 'primary'}
-                  size="sm"
-                />
-                <Badge text={`Lvl ${profile?.level || 1}`} variant="warning" size="sm" />
+
+            <View style={styles.profileMeta}>
+              <Text style={styles.profileName}>{userName}</Text>
+              <Text style={styles.profileEmail}>{userEmail}</Text>
+
+              <View style={styles.roleRow}>
+                <View
+                  style={[
+                    styles.rolePill,
+                    {
+                      backgroundColor:
+                        userType === "smoker"
+                          ? COLORS.primaryDim
+                          : COLORS.secondaryDim,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.rolePillText,
+                      {
+                        color:
+                          userType === "smoker"
+                            ? COLORS.primary
+                            : COLORS.secondary,
+                      },
+                    ]}
+                  >
+                    {userType === "smoker" ? "Cessation Track" : "Fitness Track"}
+                  </Text>
+                </View>
+
+                <Pressable
+                  onPress={handleToggleUserType}
+                  style={styles.switchModeBtn}
+                  accessibilityRole="button"
+                >
+                  <RefreshCw size={12} color={COLORS.textSecondary} />
+                  <Text style={styles.switchModeText}>Switch</Text>
+                </Pressable>
               </View>
             </View>
           </View>
-        </GlassCard>
+        </Card>
 
-        {/* Dynamic Health Score Gauge */}
-        <SectionHeader title="Vitality & Health Score" />
-        <GlassCard style={styles.scoreCard}>
-          <View style={styles.scoreRow}>
-            <ProgressRing
-              size={90}
-              strokeWidth={8}
-              progress={healthScore / 100}
+        {/* Level & XP Progression Card */}
+        <Card style={styles.xpCard} elevation="medium">
+          <View style={styles.xpHeader}>
+            <View style={styles.levelBadge}>
+              <Award size={18} color={COLORS.secondary} />
+              <Text style={styles.levelText}>Level {level || 1}</Text>
+            </View>
+
+            <View style={styles.streakBadge}>
+              <Flame size={16} color={COLORS.accent} />
+              <Text style={styles.streakText}>{streak || 0} Day Streak</Text>
+            </View>
+          </View>
+
+          <View style={styles.xpBarContainer}>
+            <View style={styles.xpLabelsRow}>
+              <Text style={styles.xpCurrentLabel}>{xpCurrent} Total XP</Text>
+              <Text style={styles.xpTargetLabel}>{xpForNext} XP to Level {(level || 1) + 1}</Text>
+            </View>
+            <ProgressBar
+              progress={xpProgress}
               color={COLORS.primary}
-            >
-              <Text style={styles.scoreNumber}>{healthScore}</Text>
-              <Text style={styles.scoreSubLabel}>/100</Text>
-            </ProgressRing>
+              height={8}
+            />
+          </View>
 
-            <View style={{ flex: 1 }}>
-              <Text style={styles.scoreHeading}>Optimal Recovery Status</Text>
-              <Text style={styles.scoreDesc}>
-                Calculated from habit streak, craving resistance, and step volume.
-              </Text>
+          <Button
+            title={checkedInToday ? "Checked In Today ✓" : "Verify Daily Streak (+25 XP)"}
+            variant={checkedInToday ? "outline" : "primary"}
+            size="md"
+            fullWidth
+            onPress={handleDailyCheckIn}
+            disabled={checkedInToday}
+            icon={<Zap size={16} color={checkedInToday ? COLORS.textSecondary : COLORS.textInverse} />}
+          />
+        </Card>
 
-              <View style={styles.scoreMiniBars}>
-                <View style={styles.miniBarItem}>
-                  <Text style={styles.miniBarName}>Cardiovascular</Text>
-                  <Text style={styles.miniBarVal}>85%</Text>
+        {/* Achievements Showcase Section */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Award size={18} color={COLORS.primary} />
+            <Text style={styles.sectionHeading}>Trophy Vault</Text>
+          </View>
+
+          <View style={styles.achievementsGrid}>
+            {achievements.map((ach) => (
+              <Card
+                key={ach.id}
+                style={[
+                  styles.achievementCard,
+                  ach.unlocked && styles.achievementUnlocked,
+                ]}
+                elevation="low"
+              >
+                <View style={styles.achIconBox}>
+                  {ach.unlocked ? (
+                    <CheckCircle2 size={24} color={COLORS.primary} />
+                  ) : (
+                    <Lock size={22} color={COLORS.textMuted} />
+                  )}
                 </View>
-                <View style={styles.miniBarItem}>
-                  <Text style={styles.miniBarName}>Lung Capacity</Text>
-                  <Text style={styles.miniBarVal}>78%</Text>
-                </View>
+                <Text style={styles.achTitle} numberOfLines={1}>
+                  {ach.title}
+                </Text>
+                <Text style={styles.achDesc} numberOfLines={2}>
+                  {ach.description}
+                </Text>
+                <Text
+                  style={[
+                    styles.achReward,
+                    ach.unlocked && { color: COLORS.primary },
+                  ]}
+                >
+                  +{ach.xpReward} XP
+                </Text>
+              </Card>
+            ))}
+          </View>
+        </View>
+
+        {/* Settings & Options Menu */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Settings size={18} color={COLORS.textSecondary} />
+            <Text style={styles.sectionHeading}>Preferences & Support</Text>
+          </View>
+
+          <Card style={styles.settingsCard} elevation="low">
+            {/* Notification Switch Row */}
+            <View style={styles.settingRow}>
+              <View style={styles.settingIconBox}>
+                <Bell size={20} color={COLORS.primary} />
               </View>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Daily Streak Reminders</Text>
+                <Text style={styles.settingSubtitle}>
+                  Notifications for evening check-in and craving resistance
+                </Text>
+              </View>
+              <Switch
+                value={notifEnabled}
+                onValueChange={setNotifEnabled}
+                trackColor={{ false: COLORS.surfaceBorder, true: COLORS.primary }}
+                thumbColor="#FFFFFF"
+              />
             </View>
-          </View>
-        </GlassCard>
 
-        {/* Lifetime Milestones Grid */}
-        <SectionHeader title="Lifetime Achievements" />
-        <View style={styles.statsGrid}>
-          <GlassCard style={styles.statCard}>
-            <FontAwesome5 name="fire" size={20} color={COLORS.accent} />
-            <Text style={styles.statValue}>{stats.streak} Days</Text>
-            <Text style={styles.statLabel}>Clean Streak</Text>
-          </GlassCard>
+            <View style={styles.settingDivider} />
 
-          <GlassCard style={styles.statCard}>
-            <FontAwesome5 name="coins" size={20} color={COLORS.success} />
-            <Text style={styles.statValue}>₹{stats.totalMoneySaved}</Text>
-            <Text style={styles.statLabel}>Saved</Text>
-          </GlassCard>
+            {/* Medical Disclaimer Row */}
+            <Pressable
+              onPress={() => router.push("/disease-risk" as any)}
+              style={styles.settingRow}
+              accessibilityRole="button"
+            >
+              <View style={styles.settingIconBox}>
+                <Shield size={20} color={COLORS.secondary} />
+              </View>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Clinical & Actuarial Disclaimer</Text>
+                <Text style={styles.settingSubtitle}>
+                  View predictive health models and medical references
+                </Text>
+              </View>
+              <ChevronRight size={18} color={COLORS.textMuted} />
+            </Pressable>
 
-          <GlassCard style={styles.statCard}>
-            <Ionicons name="ban" size={22} color={COLORS.primary} />
-            <Text style={styles.statValue}>{stats.totalCigarettesAvoided}</Text>
-            <Text style={styles.statLabel}>Cigs Avoided</Text>
-          </GlassCard>
+            <View style={styles.settingDivider} />
 
-          <GlassCard style={styles.statCard}>
-            <Ionicons name="shield-checkmark" size={22} color={COLORS.secondary} />
-            <Text style={styles.statValue}>{stats.totalCravingsHandled}</Text>
-            <Text style={styles.statLabel}>Cravings Resisted</Text>
-          </GlassCard>
+            {/* Edit Profile Row */}
+            <Pressable
+              onPress={() => router.push("/edit-profile" as any)}
+              style={styles.settingRow}
+              accessibilityRole="button"
+            >
+              <View style={styles.settingIconBox}>
+                <UserIcon size={20} color={COLORS.accent} />
+              </View>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Edit Health Biometrics</Text>
+                <Text style={styles.settingSubtitle}>
+                  Height, weight, and emergency guardian contact
+                </Text>
+              </View>
+              <ChevronRight size={18} color={COLORS.textMuted} />
+            </Pressable>
+          </Card>
         </View>
 
-        {/* Profile Switcher CTA */}
-        <GlassCard style={styles.switchCard}>
-          <View style={styles.switchRow}>
-            <View style={[styles.switchIconBox, { backgroundColor: COLORS.secondaryGlow }]}>
-              <Ionicons name="swap-horizontal" size={22} color={COLORS.secondary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.switchTitle}>Dual Profile Switcher</Text>
-              <Text style={styles.switchSub}>
-                Currently: <Text style={{ color: COLORS.primary, fontWeight: '700' }}>{userType === 'non-smoker' ? 'Fitness & Wellness' : 'Smoke-Free Journey'}</Text>
-              </Text>
-            </View>
-            <TouchableOpacity style={styles.switchBtn} onPress={handleToggleUserType}>
-              <Text style={styles.switchBtnText}>Switch ⚡</Text>
-            </TouchableOpacity>
-          </View>
-        </GlassCard>
-
-        {/* Settings Menu List */}
-        <SectionHeader title="Preferences & Security" />
-        <View style={styles.settingsList}>
-          <TouchableOpacity
-            style={styles.settingItem}
-            onPress={() => router.push('/onboarding' as any)}
-          >
-            <Ionicons name="clipboard-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.settingText}>Retake Health Questionnaire & AI Setup</Text>
-            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.settingItem}
-            onPress={() => router.push(userType === 'non-smoker' ? ('/fitness-plans' as any) : ('/quit-plan' as any))}
-          >
-            <MaterialCommunityIcons name="robot" size={20} color={COLORS.secondary} />
-            <Text style={styles.settingText}>
-              {userType === 'non-smoker' ? 'AI Athletic Training Plan' : 'AI 30-Day Quit Protocol'}
-            </Text>
-            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.settingItem}
-            onPress={() => router.push('/goals' as any)}
-          >
-            <Ionicons name="sparkles" size={20} color={COLORS.accent} />
-            <Text style={styles.settingText}>Agentic AI Daily Goals Planner</Text>
-            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.settingItem}
-            onPress={() => router.push('/edit-profile' as any)}
-          >
-            <Ionicons name="person-outline" size={20} color={COLORS.textPrimary} />
-            <Text style={styles.settingText}>Edit Profile Info</Text>
-            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.settingItem}
-            onPress={() => router.push('/rewards' as any)}
-          >
-            <Ionicons name="gift-outline" size={20} color={COLORS.accent} />
-            <Text style={styles.settingText}>Swadeshi Brand Coupons</Text>
-            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
-          </TouchableOpacity>
-
-          <View style={styles.settingItem}>
-            <Ionicons name="notifications-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.settingText}>Daily Check-In Alerts</Text>
-            <Switch
-              value={notifDaily}
-              onValueChange={setNotifDaily}
-              trackColor={{ false: COLORS.surfaceBorder, true: COLORS.primary }}
-            />
-          </View>
-
-          <View style={styles.settingItem}>
-            <Ionicons name="shield-outline" size={20} color={COLORS.danger} />
-            <Text style={styles.settingText}>SOS Emergency Monitoring</Text>
-            <Switch
-              value={notifSos}
-              onValueChange={setNotifSos}
-              trackColor={{ false: COLORS.surfaceBorder, true: COLORS.primary }}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.settingItem, { borderBottomWidth: 0 }]}
-            onPress={handleLogout}
-          >
-            <Ionicons name="log-out-outline" size={20} color={COLORS.danger} />
-            <Text style={[styles.settingText, { color: COLORS.danger }]}>Sign Out of Navjivan</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Logout Button */}
+        <Button
+          title="Sign Out of Navjivan"
+          variant="danger"
+          size="lg"
+          fullWidth
+          onPress={handleLogout}
+          icon={<LogOut size={18} color="#FFFFFF" />}
+          style={{ marginTop: SPACING.md, marginBottom: SPACING.xl }}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -292,208 +420,264 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.background,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.surfaceBorder,
-  },
-  headerTitle: {
-    ...TYPOGRAPHY.heading3,
-    color: COLORS.textPrimary,
-  },
-  settingsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    borderWidth: 1,
-    borderColor: COLORS.accent,
-    paddingHorizontal: SPACING.sm + 4,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.full,
-  },
-  proText: {
-    color: COLORS.accent,
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  scrollContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    paddingBottom: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderSubtle,
+    backgroundColor: COLORS.surface,
   },
-  userCard: {
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
+  headerTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
   },
-  userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  headerSubtitle: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  badgePro: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  badgeProText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.accent,
+    fontWeight: "700",
+    fontSize: 10,
+  },
+  scrollContent: {
+    padding: SPACING.lg,
+    gap: SPACING.lg,
+  },
+  profileHeroCard: {
+    padding: SPACING.lg,
+  },
+  profileRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: SPACING.md,
   },
-  avatarBox: {
-    width: 60,
-    height: 60,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.primaryGlow,
+  avatarCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: COLORS.surfaceElevated,
     borderWidth: 2,
     borderColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
-    fontSize: 24,
-    fontWeight: '900',
+    ...TYPOGRAPHY.h2,
     color: COLORS.primary,
+    fontWeight: "800",
   },
-  userName: {
-    ...TYPOGRAPHY.heading2,
-    fontSize: 18,
+  profileMeta: {
+    flex: 1,
+  },
+  profileName: {
+    ...TYPOGRAPHY.h2,
     color: COLORS.textPrimary,
   },
-  userEmail: {
+  profileEmail: {
     ...TYPOGRAPHY.caption,
     color: COLORS.textMuted,
-    marginBottom: 4,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  scoreCard: {
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  scoreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  scoreNumber: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: COLORS.primary,
-  },
-  scoreSubLabel: {
-    fontSize: 10,
-    color: COLORS.textMuted,
-    fontWeight: '600',
-  },
-  scoreHeading: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 15,
-    color: COLORS.textPrimary,
-  },
-  scoreDesc: {
-    ...TYPOGRAPHY.caption,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    lineHeight: 15,
     marginTop: 2,
+  },
+  roleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  rolePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  rolePillText: {
+    ...TYPOGRAPHY.caption,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  switchModeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  switchModeText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  xpCard: {
+    padding: SPACING.lg,
+  },
+  xpHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: SPACING.md,
+  },
+  levelBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.secondaryDim,
+  },
+  levelText: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.secondary,
+    fontWeight: "700",
+  },
+  streakBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  streakText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.accent,
+    fontWeight: "700",
+  },
+  xpBarContainer: {
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  xpLabelsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  xpCurrentLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.primary,
+    fontWeight: "700",
+  },
+  xpTargetLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+  },
+  sectionContainer: {
+    gap: SPACING.sm,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  sectionHeading: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
+  },
+  achievementsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.sm,
+  },
+  achievementCard: {
+    width: (width - SPACING.lg * 2 - SPACING.sm * 2) / 3,
+    padding: SPACING.sm,
+    alignItems: "center",
+    opacity: 0.6,
+  },
+  achievementUnlocked: {
+    opacity: 1,
+    borderWidth: 1,
+    borderColor: "rgba(16, 185, 129, 0.4)",
+  },
+  achIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.surfaceElevated,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: SPACING.xs,
   },
-  scoreMiniBars: {
-    gap: 2,
-  },
-  miniBarItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  miniBarName: {
-    fontSize: 10,
-    color: COLORS.textMuted,
-  },
-  miniBarVal: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-    marginBottom: SPACING.lg,
-  },
-  statCard: {
-    width: '48%',
-    padding: SPACING.md,
-    alignItems: 'center',
-  },
-  statValue: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 16,
+  achTitle: {
+    ...TYPOGRAPHY.caption,
+    fontWeight: "700",
     color: COLORS.textPrimary,
+    textAlign: "center",
+    fontSize: 11,
+  },
+  achDesc: {
+    fontSize: 9,
+    color: COLORS.textMuted,
+    textAlign: "center",
+    marginTop: 2,
+    lineHeight: 12,
+  },
+  achReward: {
+    ...TYPOGRAPHY.caption,
+    fontSize: 10,
+    fontWeight: "700",
+    color: COLORS.textMuted,
     marginTop: 4,
   },
-  statLabel: {
-    ...TYPOGRAPHY.caption,
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  switchCard: {
+  settingsCard: {
     padding: SPACING.md,
-    marginBottom: SPACING.lg,
   },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
+  settingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    paddingVertical: SPACING.xs,
   },
-  switchIconBox: {
+  settingIconBox: {
     width: 40,
     height: 40,
     borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: COLORS.surfaceElevated,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  switchTitle: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  switchSub: {
-    ...TYPOGRAPHY.caption,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
-  switchBtn: {
-    backgroundColor: COLORS.secondaryGlow,
-    borderWidth: 1,
-    borderColor: COLORS.secondary,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 6,
-    borderRadius: RADIUS.md,
-  },
-  switchBtnText: {
-    color: COLORS.secondary,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  settingsList: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceBorder,
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING.md,
-    gap: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.surfaceBorder,
-  },
-  settingText: {
+  settingInfo: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
+  },
+  settingTitle: {
+    ...TYPOGRAPHY.body,
+    fontWeight: "600",
     color: COLORS.textPrimary,
+  },
+  settingSubtitle: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  settingDivider: {
+    height: 1,
+    backgroundColor: COLORS.surfaceBorder,
+    marginVertical: SPACING.sm,
   },
 });

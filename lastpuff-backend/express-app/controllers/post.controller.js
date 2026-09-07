@@ -38,10 +38,17 @@ export const createPost = async (req, res) => {
       }
     }
 
+    const userType = req.body.userType || req.user?.userType || "smoker";
+    const postType = req.body.postType || "text";
+    const challengeId = req.body.challengeId || null;
+
     const post = await Post.create({
       author: authorId,
       content,
       images,
+      userType,
+      postType,
+      challengeId,
     });
 
     return res
@@ -64,7 +71,15 @@ export const getFeed = async (req, res) => {
     const limit = Math.min(50, parseInt(req.query.limit || "10", 10));
     const skip = (page - 1) * limit;
 
-    const posts = await Post.find({ isDeleted: false })
+    const query = { isDeleted: false };
+    if (req.query.userType && req.query.userType !== "all") {
+      query.userType = req.query.userType;
+    }
+    if (req.query.postType && req.query.postType !== "all") {
+      query.postType = req.query.postType;
+    }
+
+    const posts = await Post.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)

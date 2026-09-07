@@ -4,386 +4,405 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
-  ScrollView,
+  Pressable,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../constants/theme';
-import GlassCard from '../components/ui/GlassCard';
-import { sendAiChat } from '../services/api';
+import {
+  ArrowLeft,
+  Send,
+  Trash2,
+  Sparkles,
+  Bot,
+  User as UserIcon,
+  Wind,
+  ShieldAlert,
+  Apple,
+  Activity,
+} from 'lucide-react-native';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOW } from '../constants/theme';
+import { sendChatMessage, fetchChatHistory, clearChatHistory } from '../services/api';
 import { useUser } from '../context/UserContext';
 
-interface Message {
+interface ChatItem {
   id: string;
-  sender: 'user' | 'ai';
-  text: string;
+  role: 'user' | 'assistant';
+  content: string;
   timestamp: string;
-  action?: { label: string; route: string };
-}
-
-function getSmartAiResponse(
-  text: string,
-  userType: 'smoker' | 'non-smoker'
-): { reply: string; action?: { label: string; route: string } } {
-  const lower = text.toLowerCase();
-
-  if (
-    lower.includes('craving') ||
-    lower.includes('smoke') ||
-    lower.includes('urge') ||
-    lower.includes('resist') ||
-    lower.includes('puff')
-  ) {
-    return {
-      reply:
-        "Cravings peak within 3 to 5 minutes and then subside as dopamine stabilizes. Drink a glass of cold water and begin the 4-7-8 breathing loop right now. You're stronger than a 5-minute chemical trick! 💪",
-      action: { label: 'Launch 4-7-8 Breathing SOS 🫁', route: '/sos' },
-    };
-  }
-
-  if (lower.includes('chai') || lower.includes('tea') || lower.includes('coffee')) {
-    return {
-      reply:
-        'Chai is one of the strongest conditioned smoking triggers in India! Break the neural loop: switch to green or ginger tea for 1 week, change your seating spot, or keep roasted makhana nearby. ☕✨',
-      action: { label: 'Log Healthy Indian Snack 🥗', route: '/nutrition' },
-    };
-  }
-
-  if (
-    lower.includes('plan') ||
-    lower.includes('quit') ||
-    lower.includes('strategy') ||
-    lower.includes('protocol') ||
-    lower.includes('how to')
-  ) {
-    return {
-      reply:
-        'Your optimal protocol is a Gradual 30-Day Stepdown or Cold Turkey sprint. We cap daily cigarettes by 25% each week while redirecting morning routines to hydration and heritage walks.',
-      action: { label: 'Open 30-Day Quit Strategy 📅', route: '/quit-plan' },
-    };
-  }
-
-  if (
-    lower.includes('lung') ||
-    lower.includes('health') ||
-    lower.includes('heart') ||
-    lower.includes('risk') ||
-    lower.includes('cancer') ||
-    lower.includes('copd')
-  ) {
-    return {
-      reply:
-        'Within 24 hours of zero puffs, carbon monoxide drops to normal and oxygen saturation spikes. In 48 hours, nerve endings begin regrowing. Check your calculated pack-year exposure and organ reversal radar.',
-      action: { label: 'View Disease Risk Radar ⚠️', route: '/disease-risk' },
-    };
-  }
-
-  if (
-    lower.includes('protein') ||
-    lower.includes('diet') ||
-    lower.includes('food') ||
-    lower.includes('meal') ||
-    lower.includes('eat') ||
-    lower.includes('calorie')
-  ) {
-    return {
-      reply:
-        'Aim for 1.2g to 1.6g of protein per kg of bodyweight. Indian staple powerhouses: paneer tikka, yellow dal with jeera rice, boiled eggs, roasted sattu, and greek yogurt. Track your macros in 1 tap!',
-      action: { label: 'Open AI Meal Logger 🍽️', route: '/nutrition' },
-    };
-  }
-
-  if (
-    lower.includes('step') ||
-    lower.includes('walk') ||
-    lower.includes('padyatra') ||
-    lower.includes('cardio') ||
-    lower.includes('run')
-  ) {
-    return {
-      reply:
-        'Every 1,000 steps flushes lymphatic waste and stimulates endorphins that outcompete nicotine urges. Progress along the historic Dandi March or Char Dham pilgrimage trail today!',
-      action: { label: 'Walk Padyatra Trail 👣', route: '/padyatra' },
-    };
-  }
-
-  if (
-    lower.includes('goal') ||
-    lower.includes('daily') ||
-    lower.includes('agent') ||
-    lower.includes('agentic') ||
-    lower.includes('target')
-  ) {
-    return {
-      reply:
-        'Your Agentic AI continually evaluates your daily habits to synthesize 3 high-impact micro-goals. Check your active missions or generate a fresh batch for extra XP!',
-      action: { label: 'Open AI Goal Synthesizer 🎯', route: '/goals' },
-    };
-  }
-
-  if (
-    lower.includes('sleep') ||
-    lower.includes('insomnia') ||
-    lower.includes('rest') ||
-    lower.includes('tired') ||
-    lower.includes('night')
-  ) {
-    return {
-      reply:
-        'Nicotine withdrawal disrupts REM sleep cycles. During detox, take 200mg magnesium glycinate or warm turmeric milk (Haldi Doodh) 45 minutes before bed. Avoid screens after 10 PM. 🌙',
-      action: { label: 'Practice Mindset Affirmation 🧘', route: '/mental-health' },
-    };
-  }
-
-  if (userType === 'non-smoker') {
-    return {
-      reply:
-        'Consistency beats intensity every time. Hit your 10,000 step milestone, log 3L hydration, and ensure 25g post-workout protein to maximize recovery. What workout are you tackling today? ⚡',
-      action: { label: 'Explore Fitness Splits 🏋️', route: '/fitness-plans' },
-    };
-  }
-
-  return {
-    reply:
-      'Every urge you withstand permanently weakens the nicotine receptors in your prefrontal cortex. You are actively reshaping your brain right now. Take a deep diaphragmatic breath and stay strong!',
-    action: { label: 'Explore Recovery Missions 🏆', route: '/goals' },
+  action?: {
+    label: string;
+    route: string;
+    icon?: 'wind' | 'sos' | 'nutrition' | 'activity';
   };
 }
 
 const SMOKER_PROMPTS = [
-  '🚨 I have a severe craving right now!',
-  '☕ How do I drink chai without smoking?',
-  '😴 Nicotine withdrawal is affecting my sleep',
-  '🫁 When do my lungs start clearing?',
+  'I have a strong craving right now',
+  'Tips for morning chai trigger',
+  'Explain my quit timeline',
+  'Suggest high-protein Indian snacks',
 ];
 
 const FITNESS_PROMPTS = [
-  '🥗 Quick high-protein vegetarian meal idea',
-  '🏃 How do I pace my 5K running warmup?',
-  '💪 Best exercises to build core strength',
-  '🧘 Breathing routine for stress relief',
+  'Suggest a 20-min workout',
+  'High-protein Indian vegetarian meals',
+  'How to build consistent morning habits?',
+  'Tips to boost my stamina & steps',
 ];
+
+const STORAGE_KEY = '@navjivan_chat_cache';
 
 export default function ChatbotScreen() {
   const router = useRouter();
-  const { userType } = useUser();
-  const scrollViewRef = useRef<ScrollView>(null);
+  const { userType, profile } = useUser();
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      sender: 'ai',
-      text:
-        userType === 'non-smoker'
-          ? "Namaste! 🙏 I'm your Navjivan Fitness & Nutrition Copilot. How can I assist your athletic training, Padyatra steps, or diet today?"
-          : "Namaste! 🙏 I'm your LastPuff Quit-Smoking Copilot. Facing a craving or need a motivational strategy? I'm here 24/7.",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      action:
-        userType === 'non-smoker'
-          ? { label: 'Explore Fitness Splits 🏋️', route: '/fitness-plans' }
-          : { label: 'Launch 4-7-8 Breathing SOS 🫁', route: '/sos' },
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatItem[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
-  const quickPrompts = userType === 'non-smoker' ? FITNESS_PROMPTS : SMOKER_PROMPTS;
+  const flatListRef = useRef<FlatList>(null);
+  const promptSuggestions = userType === 'non-smoker' ? FITNESS_PROMPTS : SMOKER_PROMPTS;
 
-  const handleSend = async (textToSend?: string) => {
-    const text = (textToSend || inputText).trim();
-    if (!text || loading) return;
+  // Load chat history on mount
+  useEffect(() => {
+    loadChatHistory();
+  }, []);
+
+  const loadChatHistory = async () => {
+    try {
+      // First try local cache for instant UI
+      const cached = await AsyncStorage.getItem(STORAGE_KEY);
+      if (cached) {
+        setMessages(JSON.parse(cached));
+      }
+
+      // Then fetch from server
+      const res = await fetchChatHistory(30);
+      if (res.data?.success && Array.isArray(res.data.data) && res.data.data.length > 0) {
+        const serverMessages: ChatItem[] = res.data.data.map((m: any) => ({
+          id: m._id || String(Math.random()),
+          role: m.role,
+          content: m.content,
+          timestamp: m.timestamp || new Date().toISOString(),
+          action: detectAction(m.content),
+        }));
+        setMessages(serverMessages);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(serverMessages));
+      } else if (!cached) {
+        // Welcome message if no history
+        const welcomeMsg: ChatItem = {
+          id: 'welcome-1',
+          role: 'assistant',
+          content: `Hello ${profile?.name || 'there'}! I am Navjivan, your AI cessation and wellness partner. How are you feeling right now? Tap any quick prompt below or type your message.`,
+          timestamp: new Date().toISOString(),
+        };
+        setMessages([welcomeMsg]);
+      }
+    } catch (err) {
+      console.warn('Failed to load chat history:', err);
+    } finally {
+      setInitialLoading(false);
+    }
+  };
+
+  // Helper to detect if message warrants a shortcut action button
+  const detectAction = (text: string): ChatItem['action'] | undefined => {
+    const lower = text.toLowerCase();
+    if (lower.includes('breathing') || lower.includes('4-7-8') || lower.includes('inhale')) {
+      return { label: 'Start 4-7-8 Breathing', route: '/games/breathing', icon: 'wind' };
+    }
+    if (lower.includes('sos') || lower.includes('intense craving') || lower.includes('relapse')) {
+      return { label: 'Open SOS Mode', route: '/sos', icon: 'sos' };
+    }
+    if (lower.includes('meal') || lower.includes('protein') || lower.includes('snack')) {
+      return { label: 'View Nutrition & Meals', route: '/nutrition', icon: 'nutrition' };
+    }
+    if (lower.includes('risk') || lower.includes('lungs') || lower.includes('health radar')) {
+      return { label: 'Check Disease Risk', route: '/disease-risk', icon: 'activity' };
+    }
+    return undefined;
+  };
+
+  const handleSend = async (customText?: string) => {
+    const textToSend = (customText || inputText).trim();
+    if (!textToSend || loading) return;
 
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (_e) {}
 
-    const userMsg: Message = {
-      id: `user_${Date.now()}`,
-      sender: 'user',
-      text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    const userMessage: ChatItem = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: textToSend,
+      timestamp: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInputText('');
     setLoading(true);
 
     try {
-      const res = await sendAiChat(
-        text,
-        undefined,
-        userType === 'non-smoker' ? 'fitness_coach' : 'quit_smoking_coach'
-      );
-      const replyText = res?.data?.reply || res?.data?.message;
+      const res = await sendChatMessage(textToSend);
+      const replyText =
+        res.data?.data?.response ||
+        res.data?.data?.message ||
+        "I'm here with you. Take a slow, deep breath in for 4 seconds, hold for 7, and exhale for 8.";
 
-      if (replyText) {
-        const smart = getSmartAiResponse(text, userType || 'smoker');
-        const aiMsg: Message = {
-          id: `ai_${Date.now()}`,
-          sender: 'ai',
-          text: replyText,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          action: smart.action,
-        };
-        setMessages((prev) => [...prev, aiMsg]);
-      } else {
-        const smart = getSmartAiResponse(text, userType || 'smoker');
-        const aiMsg: Message = {
-          id: `ai_${Date.now()}`,
-          sender: 'ai',
-          text: smart.reply,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          action: smart.action,
-        };
-        setMessages((prev) => [...prev, aiMsg]);
-      }
-    } catch (_err) {
-      const smart = getSmartAiResponse(text, userType || 'smoker');
-      const fallbackMsg: Message = {
-        id: `ai_${Date.now()}`,
-        sender: 'ai',
-        text: smart.reply,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        action: smart.action,
+      const assistantMessage: ChatItem = {
+        id: res.data?.data?.chatMessageId || `ai-${Date.now()}`,
+        role: 'assistant',
+        content: replyText,
+        timestamp: new Date().toISOString(),
+        action: detectAction(replyText),
+      };
+
+      const updated = [...newMessages, assistantMessage];
+      setMessages(updated);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch (err) {
+      console.warn('Chat send error:', err);
+      const fallbackMsg: ChatItem = {
+        id: `ai-err-${Date.now()}`,
+        role: 'assistant',
+        content:
+          "Remember: cravings typically peak within 3 to 5 minutes. Take 10 deep breaths right now. You're fully in control!",
+        timestamp: new Date().toISOString(),
+        action: { label: 'Launch 4-7-8 Breathing', route: '/games/breathing', icon: 'wind' },
       };
       setMessages((prev) => [...prev, fallbackMsg]);
     } finally {
       setLoading(false);
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+    }
+  };
+
+  const handleClearHistory = () => {
+    Alert.alert(
+      'Clear Conversation',
+      'Are you sure you want to clear your chat history?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              await clearChatHistory();
+              await AsyncStorage.removeItem(STORAGE_KEY);
+              setMessages([
+                {
+                  id: 'welcome-reset',
+                  role: 'assistant',
+                  content: 'Chat history cleared. How can I support your journey today?',
+                  timestamp: new Date().toISOString(),
+                },
+              ]);
+            } catch (err) {
+              console.warn('Failed to clear chat:', err);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderActionIcon = (icon?: string) => {
+    switch (icon) {
+      case 'wind':
+        return <Wind size={16} color={COLORS.primary} />;
+      case 'sos':
+        return <ShieldAlert size={16} color={COLORS.error} />;
+      case 'nutrition':
+        return <Apple size={16} color={COLORS.accent} />;
+      case 'activity':
+        return <Activity size={16} color={COLORS.info} />;
+      default:
+        return <Sparkles size={16} color={COLORS.primary} />;
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <View style={styles.aiStatusDot} />
-          <Text style={styles.headerTitle}>Navjivan AI Copilot</Text>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.headerBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <ArrowLeft size={22} color={COLORS.textPrimary} />
+        </Pressable>
+
+        <View style={styles.headerTitleBox}>
+          <View style={styles.titleRow}>
+            <Text style={styles.headerTitle}>Navjivan AI</Text>
+            <View style={styles.onlineDot} />
+          </View>
+          <Text style={styles.headerSubtitle}>Clinical Cessation & Health Coach</Text>
         </View>
-        <View style={{ width: 40 }} />
+
+        <Pressable
+          onPress={handleClearHistory}
+          style={styles.headerBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Clear chat history"
+        >
+          <Trash2 size={20} color={COLORS.textMuted} />
+        </Pressable>
       </View>
 
+      {/* Main Chat Screen with Keyboard Avoidance */}
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.chatArea}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <ScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={styles.chatScroll}
-          showsVerticalScrollIndicator={false}
-        >
-          {messages.map((m) => (
-            <View
-              key={m.id}
-              style={[
-                styles.messageRow,
-                m.sender === 'user' ? styles.userRow : styles.aiRow,
-              ]}
-            >
-              {m.sender === 'ai' && (
-                <View style={[styles.avatarBox, { backgroundColor: COLORS.primaryGlow }]}>
-                  <MaterialCommunityIcons name="robot" size={18} color={COLORS.primary} />
-                </View>
-              )}
-              <View
-                style={[
-                  styles.bubble,
-                  m.sender === 'user' ? styles.userBubble : styles.aiBubble,
-                ]}
-              >
-                <Text
+        {initialLoading ? (
+          <View style={styles.centerBox}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Connecting to clinical coach...</Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.messageList}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            renderItem={({ item }) => {
+              const isUser = item.role === 'user';
+              return (
+                <View
                   style={[
-                    styles.bubbleText,
-                    m.sender === 'user' ? styles.userBubbleText : styles.aiBubbleText,
+                    styles.messageRow,
+                    isUser ? styles.messageRowUser : styles.messageRowAssistant,
                   ]}
                 >
-                  {m.text}
-                </Text>
-                <Text style={styles.bubbleTime}>{m.timestamp}</Text>
+                  {!isUser && (
+                    <View style={styles.botAvatar}>
+                      <Bot size={18} color={COLORS.primary} />
+                    </View>
+                  )}
 
-                {m.action && (
-                  <TouchableOpacity
-                    style={styles.actionPill}
-                    onPress={() => router.push(m.action!.route as any)}
-                    activeOpacity={0.8}
+                  <View
+                    style={[
+                      styles.messageBubble,
+                      isUser ? styles.bubbleUser : styles.bubbleAssistant,
+                    ]}
                   >
-                    <Ionicons name="flash" size={12} color={COLORS.primary} />
-                    <Text style={styles.actionPillText}>{m.action.label}</Text>
-                    <Ionicons name="arrow-forward" size={12} color={COLORS.primary} />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          ))}
+                    <Text
+                      style={[
+                        styles.messageText,
+                        isUser ? styles.textUser : styles.textAssistant,
+                      ]}
+                    >
+                      {item.content}
+                    </Text>
 
-          {loading && (
-            <View style={[styles.messageRow, styles.aiRow]}>
-              <View style={[styles.avatarBox, { backgroundColor: COLORS.primaryGlow }]}>
-                <MaterialCommunityIcons name="robot" size={18} color={COLORS.primary} />
-              </View>
-              <View style={[styles.bubble, styles.aiBubble, { paddingVertical: 12 }]}>
-                <ActivityIndicator color={COLORS.primary} size="small" />
-              </View>
-            </View>
-          )}
-        </ScrollView>
+                    {item.action && (
+                      <Pressable
+                        onPress={() => router.push(item.action!.route as any)}
+                        style={styles.actionChip}
+                        accessibilityRole="button"
+                      >
+                        {renderActionIcon(item.action.icon)}
+                        <Text style={styles.actionChipText}>{item.action.label}</Text>
+                      </Pressable>
+                    )}
 
-        {/* Quick Suggestion Chips */}
-        <View style={styles.suggestionsContainer}>
-          <ScrollView
+                    <Text
+                      style={[
+                        styles.timestampText,
+                        isUser ? styles.timeUser : styles.timeAssistant,
+                      ]}
+                    >
+                      {new Date(item.timestamp).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
+
+                  {isUser && (
+                    <View style={styles.userAvatar}>
+                      <UserIcon size={16} color={COLORS.textPrimary} />
+                    </View>
+                  )}
+                </View>
+              );
+            }}
+            ListFooterComponent={
+              loading ? (
+                <View style={[styles.messageRow, styles.messageRowAssistant]}>
+                  <View style={styles.botAvatar}>
+                    <Bot size={18} color={COLORS.primary} />
+                  </View>
+                  <View style={[styles.messageBubble, styles.bubbleAssistant, styles.typingBubble]}>
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                    <Text style={styles.typingText}>Navjivan is thinking...</Text>
+                  </View>
+                </View>
+              ) : null
+            }
+          />
+        )}
+
+        {/* Quick Prompts Chips */}
+        <View style={styles.promptsContainer}>
+          <FlatList
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.suggestionsScroll}
-          >
-            {quickPrompts.map((prompt) => (
-              <TouchableOpacity
-                key={prompt}
-                style={styles.suggestionChip}
-                onPress={() => handleSend(prompt)}
+            data={promptSuggestions}
+            keyExtractor={(item) => item}
+            contentContainerStyle={styles.promptsList}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() => handleSend(item)}
+                style={styles.promptChip}
+                accessibilityRole="button"
               >
-                <Text style={styles.suggestionText}>{prompt}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                <Sparkles size={14} color={COLORS.primary} />
+                <Text style={styles.promptChipText}>{item}</Text>
+              </Pressable>
+            )}
+          />
         </View>
 
         {/* Input Bar */}
-        <View style={styles.inputContainer}>
+        <View style={styles.inputBar}>
           <TextInput
-            style={styles.input}
+            style={styles.textInput}
             value={inputText}
             onChangeText={setInputText}
-            placeholder="Ask anything about health, cravings, diet..."
+            placeholder="Ask Navjivan anything..."
             placeholderTextColor={COLORS.textMuted}
             multiline
           />
-          <TouchableOpacity
-            style={[
-              styles.sendBtn,
-              !inputText.trim() && styles.sendBtnDisabled,
-            ]}
+          <Pressable
             onPress={() => handleSend()}
             disabled={!inputText.trim() || loading}
+            style={[
+              styles.sendButton,
+              (!inputText.trim() || loading) && styles.sendButtonDisabled,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Send message"
           >
-            <Ionicons
-              name="send"
-              size={18}
-              color={inputText.trim() ? COLORS.bg : COLORS.textMuted}
-            />
-          </TouchableOpacity>
+            <Send size={18} color={COLORS.textInverse} />
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -393,168 +412,223 @@ export default function ChatbotScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.surfaceBorder,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.md,
+    borderBottomColor: COLORS.borderSubtle,
     backgroundColor: COLORS.surface,
+  },
+  headerBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceElevated,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
   },
-  headerCenter: {
+  headerTitleBox: {
+    alignItems: 'center',
+  },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  aiStatusDot: {
+  headerTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
+  },
+  onlineDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.success,
+    backgroundColor: COLORS.primary,
   },
-  headerTitle: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 16,
-    color: COLORS.textPrimary,
+  headerSubtitle: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
-  chatScroll: {
-    paddingHorizontal: SPACING.md,
+  chatArea: {
+    flex: 1,
+  },
+  centerBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.md,
+  },
+  loadingText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+  },
+  messageList: {
+    paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     gap: SPACING.md,
   },
   messageRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: SPACING.xs,
+    gap: SPACING.sm,
+    maxWidth: '86%',
   },
-  userRow: {
-    justifyContent: 'flex-end',
+  messageRowUser: {
+    alignSelf: 'flex-end',
   },
-  aiRow: {
-    justifyContent: 'flex-start',
+  messageRowAssistant: {
+    alignSelf: 'flex-start',
   },
-  avatarBox: {
+  botAvatar: {
     width: 32,
     height: 32,
-    borderRadius: RADIUS.full,
+    borderRadius: 16,
+    backgroundColor: COLORS.primaryDim,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
-  bubble: {
-    maxWidth: '80%',
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 2,
+  userAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
-  userBubble: {
+  messageBubble: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.lg,
+    ...SHADOW.sm,
+  },
+  bubbleUser: {
     backgroundColor: COLORS.primary,
     borderBottomRightRadius: 4,
   },
-  aiBubble: {
-    backgroundColor: COLORS.surfaceElevated,
+  bubbleAssistant: {
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.surfaceBorder,
     borderBottomLeftRadius: 4,
   },
-  bubbleText: {
-    fontSize: 15,
+  messageText: {
+    ...TYPOGRAPHY.body,
     lineHeight: 22,
   },
-  userBubbleText: {
-    color: COLORS.bg,
-    fontWeight: '600',
+  textUser: {
+    color: COLORS.textInverse,
+    fontWeight: '500',
   },
-  aiBubbleText: {
+  textAssistant: {
     color: COLORS.textPrimary,
   },
-  bubbleTime: {
+  timestampText: {
     fontSize: 10,
-    color: COLORS.textMuted,
+    marginTop: SPACING.xs,
     alignSelf: 'flex-end',
-    marginTop: 4,
   },
-  suggestionsContainer: {
-    paddingVertical: SPACING.xs,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.surfaceBorder,
-    backgroundColor: COLORS.surface,
+  timeUser: {
+    color: 'rgba(255, 255, 255, 0.7)',
   },
-  suggestionsScroll: {
-    paddingHorizontal: SPACING.md,
-    gap: SPACING.xs,
+  timeAssistant: {
+    color: COLORS.textMuted,
   },
-  suggestionChip: {
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceBorder,
-    borderRadius: RADIUS.full,
-    paddingHorizontal: SPACING.sm + 4,
-    paddingVertical: 6,
-  },
-  suggestionText: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.surface,
-    gap: SPACING.sm,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceBorder,
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    maxHeight: 100,
-  },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendBtnDisabled: {
-    backgroundColor: COLORS.surfaceElevated,
-  },
-  actionPill: {
+  actionChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(0, 245, 160, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 245, 160, 0.3)',
-    borderRadius: RADIUS.full,
-    paddingHorizontal: SPACING.sm + 2,
-    paddingVertical: 6,
     marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 8,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
     alignSelf: 'flex-start',
   },
-  actionPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primary,
+  actionChipText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  typingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+  },
+  typingText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+  },
+  promptsContainer: {
+    paddingVertical: SPACING.xs,
+    backgroundColor: COLORS.background,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderSubtle,
+  },
+  promptsList: {
+    paddingHorizontal: SPACING.lg,
+    gap: SPACING.sm,
+  },
+  promptChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  promptChipText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  inputBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderSubtle,
+  },
+  textInput: {
+    flex: 1,
+    backgroundColor: COLORS.surfaceElevated,
+    color: COLORS.textPrimary,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOW.sm,
+  },
+  sendButtonDisabled: {
+    opacity: 0.4,
   },
 });

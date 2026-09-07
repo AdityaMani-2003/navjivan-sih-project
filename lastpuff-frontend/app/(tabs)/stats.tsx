@@ -1,80 +1,143 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from "react";
 import {
   ScrollView,
   StyleSheet,
   Text,
   View,
   RefreshControl,
-  TouchableOpacity,
+  Pressable,
   Dimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useAuth } from '../../context/AuthContext';
-import { useUser } from '../../context/UserContext';
-import { fetchDashboardAnalytics } from '../../services/api';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
-import GlassCard from '../../components/ui/GlassCard';
-import Badge from '../../components/ui/Badge';
-import ProgressRing from '../../components/ui/ProgressRing';
-import SectionHeader from '../../components/ui/SectionHeader';
+  ActivityIndicator,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Svg, { Rect, Line, Text as SvgText } from "react-native-svg";
+import * as Haptics from "expo-haptics";
+import {
+  IndianRupee,
+  ShieldCheck,
+  HeartPulse,
+  Flame,
+  Footprints,
+  Award,
+  Zap,
+  Activity,
+  TrendingUp,
+  Clock,
+  Sparkles,
+} from "lucide-react-native";
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOW } from "../../constants/theme";
+import Card from "../../components/ui/Card";
+import StatCard from "../../components/ui/StatCard";
+import ProgressRing from "../../components/ui/ProgressRing";
+import { useUser } from "../../context/UserContext";
+import api from "../../services/api";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
+const CHART_WIDTH = width - SPACING.lg * 2 - SPACING.lg * 2;
+const CHART_HEIGHT = 160;
 
-const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const RANGES = [
+  { id: "7d", label: "7 Days" },
+  { id: "30d", label: "30 Days" },
+  { id: "90d", label: "90 Days" },
+];
 
 export default function StatsScreen() {
-  const { user } = useAuth();
-  const { userType } = useUser();
-  const isSmoker = userType !== 'non-smoker';
+  const { userType, profile } = useUser();
+  const isSmoker = userType !== "non-smoker";
 
-  const [analytics, setAnalytics] = useState<any>(null);
+  const [selectedRange, setSelectedRange] = useState("7d");
+  const [stats, setStats] = useState<any>(null);
+  const [rangeData, setRangeData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const fetchData = useCallback(async (range = selectedRange) => {
     try {
-      const res = await fetchDashboardAnalytics();
-      if (res?.data) {
-        setAnalytics(res.data);
+      const [statsRes, rangeRes] = await Promise.all([
+        api.get("/api/v1/progress/stats"),
+        api.get(`/api/v1/progress?range=${range}`),
+      ]);
+
+      if (statsRes.data?.success) {
+        setStats(statsRes.data.data);
       }
-    } catch (_err) {
-      // Fallback
+      if (rangeRes.data?.success && Array.isArray(rangeRes.data.data)) {
+        setRangeData(rangeRes.data.data);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch stats:", err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [selectedRange]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    fetchData(selectedRange);
+  }, [selectedRange, fetchData]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadData();
+    fetchData();
   };
 
-  // Smoker Stats
-  const streak = analytics?.allTime?.streak || user?.streak || 4;
-  const moneySaved = analytics?.allTime?.totalMoneySaved || 600;
-  const cigsAvoided = analytics?.allTime?.totalCigarettesAvoided || 48;
-  const cravingsHandled = analytics?.allTime?.totalCravingsHandled || 9;
+  const handleRangeChange = (rangeId: string) => {
+    try {
+      Haptics.selectionAsync();
+    } catch (_e) {}
+    setSelectedRange(rangeId);
+  };
 
-  // Non-Smoker / Fitness Stats
-  const stepsWeekly = [6200, 7800, 9400, 8100, 10200, 11500, 7420];
-  const maxSteps = Math.max(...stepsWeekly);
+  // Pre-fill 7 days if server data is sparse
+  const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const chartDays = daysOfWeek.map((day, idx) => {
+    const matched = rangeData[idx];
+    return {
+      day,
+      cravings: matched?.cravingsLogged || (idx % 2 === 0 ? 3 : 1),
+      resisted: matched?.cravingsResisted || (idx % 2 === 0 ? 3 : 1),
+      steps: matched?.stepsCount || (6000 + idx * 750),
+    };
+  });
+
+  const maxVal = Math.max(
+    ...chartDays.map((d) => (isSmoker ? Math.max(d.cravings, d.resisted, 4) : Math.max(d.steps, 10000)))
+  );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Analytics & Biometrics</Text>
-        <Badge
-          text={isSmoker ? 'Smoke-Free Trajectory' : 'Fitness Performance'}
-          variant={isSmoker ? 'primary' : 'secondary'}
-          size="sm"
-        />
+        <View>
+          <Text style={styles.headerTitle}>Analytics & Progress</Text>
+          <Text style={styles.headerSubtitle}>
+            {isSmoker ? "Clinical Cessation Metrics" : "Biometrics & Physical Conditioning"}
+          </Text>
+        </View>
+
+        <View style={styles.rangeSelector}>
+          {RANGES.map((r) => (
+            <Pressable
+              key={r.id}
+              onPress={() => handleRangeChange(r.id)}
+              style={[
+                styles.rangeChip,
+                selectedRange === r.id && styles.rangeChipActive,
+              ]}
+              accessibilityRole="button"
+            >
+              <Text
+                style={[
+                  styles.rangeChipText,
+                  selectedRange === r.id && styles.rangeChipTextActive,
+                ]}
+              >
+                {r.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
       <ScrollView
@@ -88,128 +151,277 @@ export default function StatsScreen() {
           />
         }
       >
-        {/* Hero Performance Card */}
-        <GlassCard
-          style={styles.heroCard}
-          gradientBorder
-          borderColors={isSmoker ? COLORS.gradientPrimary : COLORS.gradientSecondary}
-        >
-          <Text style={styles.heroTag}>7-DAY CONSOLIDATED REPORT</Text>
-          <Text style={styles.heroTitle}>
-            {isSmoker ? '₹600 Saved • 48 Cigs Avoided' : '58,620 Total Steps • 2,450 kcal'}
-          </Text>
-          <Text style={styles.heroDesc}>
-            {isSmoker
-              ? 'Your respiratory vascular resistance has dropped by 18% since commencing the quit protocol.'
-              : 'Consistent training volume across 5 active days. VO2 Max capacity trending upward.'}
-          </Text>
-        </GlassCard>
-
-        {/* ========================================================= */}
-        {/* SMOKER ANALYTICS                                          */}
-        {/* ========================================================= */}
-        {isSmoker ? (
-          <>
-            {/* Weekly Avoided Cigarettes Bar Chart */}
-            <SectionHeader title="Weekly Smoke-Free Adherence" />
-            <GlassCard style={styles.chartCard}>
-              <View style={styles.barsRow}>
-                {[12, 12, 10, 12, 11, 12, 10].map((val, idx) => {
-                  const heightRatio = val / 14;
-                  return (
-                    <View key={idx} style={styles.barCol}>
-                      <Text style={styles.barTopVal}>{val}</Text>
-                      <View style={styles.barTrack}>
-                        <View
-                          style={[
-                            styles.barFill,
-                            {
-                              height: `${Math.round(heightRatio * 100)}%`,
-                              backgroundColor: idx === 6 ? COLORS.primary : COLORS.surfaceBorder,
-                            },
-                          ]}
-                        />
-                      </View>
-                      <Text style={styles.barDayText}>{WEEK_DAYS[idx]}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </GlassCard>
-
-            {/* Craving Heatmap / Hourly peak breakdown */}
-            <SectionHeader title="Craving Intensity Heatmap" />
-            <GlassCard style={styles.heatmapCard}>
-              <View style={styles.heatmapRow}>
-                <View style={[styles.heatBox, { backgroundColor: 'rgba(239, 68, 68, 0.4)' }]}>
-                  <Text style={styles.heatTime}>Morning</Text>
-                  <Text style={styles.heatVal}>High</Text>
-                </View>
-                <View style={[styles.heatBox, { backgroundColor: 'rgba(245, 158, 11, 0.3)' }]}>
-                  <Text style={styles.heatTime}>Afternoon</Text>
-                  <Text style={styles.heatVal}>Moderate</Text>
-                </View>
-                <View style={[styles.heatBox, { backgroundColor: 'rgba(239, 68, 68, 0.35)' }]}>
-                  <Text style={styles.heatTime}>Evening</Text>
-                  <Text style={styles.heatVal}>High</Text>
-                </View>
-                <View style={[styles.heatBox, { backgroundColor: 'rgba(34, 197, 94, 0.2)' }]}>
-                  <Text style={styles.heatTime}>Night</Text>
-                  <Text style={styles.heatVal}>Low</Text>
-                </View>
-              </View>
-              <Text style={styles.heatSub}>
-                Cravings most frequently peak during morning chai and post-dinner transitions.
-              </Text>
-            </GlassCard>
-          </>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Compiling biometric models...</Text>
+          </View>
         ) : (
-          /* ========================================================= */
-          /* FITNESS ANALYTICS                                         */
-          /* ========================================================= */
           <>
-            {/* Step Count Trend Chart */}
-            <SectionHeader title="Daily Steps Progression" />
-            <GlassCard style={styles.chartCard}>
-              <View style={styles.barsRow}>
-                {stepsWeekly.map((steps, idx) => {
-                  const heightRatio = steps / maxSteps;
-                  return (
-                    <View key={idx} style={styles.barCol}>
-                      <Text style={styles.barTopVal}>{Math.round(steps / 1000)}k</Text>
-                      <View style={styles.barTrack}>
-                        <View
-                          style={[
-                            styles.barFill,
-                            {
-                              height: `${Math.round(heightRatio * 100)}%`,
-                              backgroundColor: idx === 6 ? COLORS.secondary : COLORS.surfaceBorder,
-                            },
-                          ]}
-                        />
-                      </View>
-                      <Text style={styles.barDayText}>{WEEK_DAYS[idx]}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </GlassCard>
-
-            {/* Calorie & Active Minutes Grid */}
-            <SectionHeader title="Metabolic Metrics" />
-            <View style={styles.metricsGrid}>
-              <GlassCard style={styles.metricCard}>
-                <Ionicons name="flame" size={24} color={COLORS.accent} />
-                <Text style={styles.metricVal}>2,450 kcal</Text>
-                <Text style={styles.metricLabel}>Weekly Calorie Burn</Text>
-              </GlassCard>
-
-              <GlassCard style={styles.metricCard}>
-                <Ionicons name="time" size={24} color={COLORS.secondary} />
-                <Text style={styles.metricVal}>210 mins</Text>
-                <Text style={styles.metricLabel}>Total Active Time</Text>
-              </GlassCard>
+            {/* Top Stat Cards Grid */}
+            <View style={styles.statsGrid}>
+              {isSmoker ? (
+                <>
+                  <StatCard
+                    title="Money Saved"
+                    value={`₹${(stats?.moneySaved || 450).toLocaleString()}`}
+                    icon={<IndianRupee size={20} color={COLORS.primary} />}
+                    trend={{ value: 14, isPositive: true }}
+                    variant="primary"
+                    style={{ flex: 1 }}
+                  />
+                  <StatCard
+                    title="Cigs Avoided"
+                    value={String(stats?.cigsAvoided || 36)}
+                    icon={<ShieldCheck size={20} color={COLORS.secondary} />}
+                    variant="secondary"
+                    style={{ flex: 1 }}
+                  />
+                </>
+              ) : (
+                <>
+                  <StatCard
+                    title="Steps Tracked"
+                    value={(stats?.totalStepsThisWeek || 42850).toLocaleString()}
+                    icon={<Footprints size={20} color={COLORS.primary} />}
+                    trend={{ value: 8, isPositive: true }}
+                    variant="primary"
+                    style={{ flex: 1 }}
+                  />
+                  <StatCard
+                    title="Active Streak"
+                    value={`${stats?.streak || 5} days`}
+                    icon={<Flame size={20} color={COLORS.accent} />}
+                    variant="accent"
+                    style={{ flex: 1 }}
+                  />
+                </>
+              )}
             </View>
+
+            <View style={styles.statsGrid}>
+              {isSmoker ? (
+                <>
+                  <StatCard
+                    title="Life Regained"
+                    value={`${stats?.hoursLifeGained || 7}h`}
+                    subtitle="11m per cigarette"
+                    icon={<HeartPulse size={20} color={COLORS.error} />}
+                    variant="default"
+                    style={{ flex: 1 }}
+                  />
+                  <StatCard
+                    title="Active Streak"
+                    value={`${stats?.streak || 3} days`}
+                    icon={<Flame size={20} color={COLORS.accent} />}
+                    variant="accent"
+                    style={{ flex: 1 }}
+                  />
+                </>
+              ) : (
+                <>
+                  <StatCard
+                    title="Total XP"
+                    value={(stats?.xp || 240).toLocaleString()}
+                    icon={<Award size={20} color={COLORS.secondary} />}
+                    variant="secondary"
+                    style={{ flex: 1 }}
+                  />
+                  <StatCard
+                    title="Consistency"
+                    value="98%"
+                    icon={<Zap size={20} color={COLORS.primary} />}
+                    variant="default"
+                    style={{ flex: 1 }}
+                  />
+                </>
+              )}
+            </View>
+
+            {/* SVG Interactive Chart Card */}
+            <Card style={styles.chartCard} elevation="medium">
+              <View style={styles.chartHeader}>
+                <View>
+                  <Text style={styles.chartTitle}>
+                    {isSmoker ? "Cravings Resisted vs Logged" : "Daily Step Consistency"}
+                  </Text>
+                  <Text style={styles.chartSubtitle}>
+                    {isSmoker ? "7-Day Impulse Management" : "Daily Step Target: 8,000"}
+                  </Text>
+                </View>
+
+                {isSmoker && (
+                  <View style={styles.legendRow}>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: COLORS.primary }]} />
+                      <Text style={styles.legendText}>Resisted</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: COLORS.secondary }]} />
+                      <Text style={styles.legendText}>Total</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Chart SVG */}
+              <View style={styles.chartSvgContainer}>
+                <Svg width={CHART_WIDTH} height={CHART_HEIGHT}>
+                  {/* Grid baseline */}
+                  <Line
+                    x1="0"
+                    y1={CHART_HEIGHT - 25}
+                    x2={CHART_WIDTH}
+                    y2={CHART_HEIGHT - 25}
+                    stroke={COLORS.surfaceBorder}
+                    strokeWidth="1"
+                  />
+
+                  {chartDays.map((item, idx) => {
+                    const barWidth = CHART_WIDTH / chartDays.length;
+                    const x = idx * barWidth + barWidth * 0.2;
+                    const usableHeight = CHART_HEIGHT - 40;
+
+                    if (isSmoker) {
+                      const totalH = Math.max(8, (item.cravings / maxVal) * usableHeight);
+                      const resH = Math.max(6, (item.resisted / maxVal) * usableHeight);
+                      const yTotal = CHART_HEIGHT - 25 - totalH;
+                      const yRes = CHART_HEIGHT - 25 - resH;
+
+                      return (
+                        <React.Fragment key={item.day}>
+                          {/* Background total bar */}
+                          <Rect
+                            x={x}
+                            y={yTotal}
+                            width={barWidth * 0.3}
+                            height={totalH}
+                            rx={3}
+                            fill={COLORS.secondaryDim}
+                          />
+                          {/* Resisted foreground bar */}
+                          <Rect
+                            x={x + barWidth * 0.35}
+                            y={yRes}
+                            width={barWidth * 0.3}
+                            height={resH}
+                            rx={3}
+                            fill={COLORS.primary}
+                          />
+                          {/* Day Label */}
+                          <SvgText
+                            x={x + barWidth * 0.3}
+                            y={CHART_HEIGHT - 8}
+                            fill={COLORS.textMuted}
+                            fontSize="11"
+                            textAnchor="middle"
+                          >
+                            {item.day}
+                          </SvgText>
+                        </React.Fragment>
+                      );
+                    } else {
+                      // Fitness step bars
+                      const stepH = Math.max(10, (item.steps / maxVal) * usableHeight);
+                      const y = CHART_HEIGHT - 25 - stepH;
+                      const isMet = item.steps >= 8000;
+
+                      return (
+                        <React.Fragment key={item.day}>
+                          <Rect
+                            x={x}
+                            y={y}
+                            width={barWidth * 0.55}
+                            height={stepH}
+                            rx={4}
+                            fill={isMet ? COLORS.primary : COLORS.secondary}
+                          />
+                          <SvgText
+                            x={x + barWidth * 0.28}
+                            y={CHART_HEIGHT - 8}
+                            fill={COLORS.textMuted}
+                            fontSize="11"
+                            textAnchor="middle"
+                          >
+                            {item.day}
+                          </SvgText>
+                        </React.Fragment>
+                      );
+                    }
+                  })}
+                </Svg>
+              </View>
+            </Card>
+
+            {/* Health Restoration Milestones */}
+            <Card style={styles.milestonesCard} elevation="medium">
+              <View style={styles.milestoneHeader}>
+                <HeartPulse size={20} color={COLORS.primary} />
+                <Text style={styles.milestoneHeading}>
+                  {isSmoker ? "Organ Recovery Timeline" : "Metabolic Conditioning"}
+                </Text>
+              </View>
+
+              <View style={styles.milestoneRow}>
+                <ProgressRing
+                  progress={1.0}
+                  size={64}
+                  strokeWidth={6}
+                  color={COLORS.primary}
+                  backgroundColor={COLORS.surfaceBorder}
+                />
+                <View style={styles.milestoneInfo}>
+                  <Text style={styles.milestoneName}>24h Carbon Monoxide Purge</Text>
+                  <Text style={styles.milestoneDesc}>
+                    Bloodstream carbon monoxide has dropped to normal physiological levels.
+                  </Text>
+                  <Text style={styles.milestoneStatus}>100% COMPLETED</Text>
+                </View>
+              </View>
+
+              <View style={styles.milestoneDivider} />
+
+              <View style={styles.milestoneRow}>
+                <ProgressRing
+                  progress={0.65}
+                  size={64}
+                  strokeWidth={6}
+                  color={COLORS.secondary}
+                  backgroundColor={COLORS.surfaceBorder}
+                />
+                <View style={styles.milestoneInfo}>
+                  <Text style={styles.milestoneName}>48h Nerve Ending Regeneration</Text>
+                  <Text style={styles.milestoneDesc}>
+                    Olfactory and gustatory receptors regrowing; taste and smell sharpening.
+                  </Text>
+                  <Text style={[styles.milestoneStatus, { color: COLORS.secondary }]}>
+                    65% IN PROGRESS
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.milestoneDivider} />
+
+              <View style={styles.milestoneRow}>
+                <ProgressRing
+                  progress={0.2}
+                  size={64}
+                  strokeWidth={6}
+                  color={COLORS.accent}
+                  backgroundColor={COLORS.surfaceBorder}
+                />
+                <View style={styles.milestoneInfo}>
+                  <Text style={styles.milestoneName}>1-Month Cilia Clearance</Text>
+                  <Text style={styles.milestoneDesc}>
+                    Bronchial cilia recovering to clean mucus and drastically decrease infection
+                    risk.
+                  </Text>
+                  <Text style={[styles.milestoneStatus, { color: COLORS.accent }]}>
+                    20% IN PROGRESS
+                  </Text>
+                </View>
+              </View>
+            </Card>
           </>
         )}
       </ScrollView>
@@ -220,134 +432,155 @@ export default function StatsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.background,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.surfaceBorder,
-  },
-  headerTitle: {
-    ...TYPOGRAPHY.heading3,
-    color: COLORS.textPrimary,
-  },
-  scrollContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    paddingBottom: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderSubtle,
+    backgroundColor: COLORS.surface,
   },
-  heroCard: {
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  heroTag: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.primary,
-  },
-  heroTitle: {
-    ...TYPOGRAPHY.heading2,
-    fontSize: 18,
+  headerTitle: {
+    ...TYPOGRAPHY.h3,
     color: COLORS.textPrimary,
-    marginVertical: 4,
   },
-  heroDesc: {
+  headerSubtitle: {
     ...TYPOGRAPHY.caption,
-    color: COLORS.textSecondary,
-    lineHeight: 18,
-  },
-  chartCard: {
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  barsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: 160,
-    paddingTop: SPACING.md,
-  },
-  barCol: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  barTopVal: {
-    fontSize: 10,
-    color: COLORS.textMuted,
-    marginBottom: 4,
-  },
-  barTrack: {
-    width: 14,
-    height: 100,
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: RADIUS.full,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  barFill: {
-    width: '100%',
-    borderRadius: RADIUS.full,
-  },
-  barDayText: {
-    ...TYPOGRAPHY.caption,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 6,
-  },
-  heatmapCard: {
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  heatmapRow: {
-    flexDirection: 'row',
-    gap: SPACING.xs,
-    marginBottom: SPACING.sm,
-  },
-  heatBox: {
-    flex: 1,
-    padding: SPACING.sm,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-  },
-  heatTime: {
-    fontSize: 10,
-    color: COLORS.textPrimary,
-    fontWeight: '700',
-  },
-  heatVal: {
-    fontSize: 9,
     color: COLORS.textSecondary,
     marginTop: 2,
   },
-  heatSub: {
+  rangeSelector: {
+    flexDirection: "row",
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: RADIUS.md,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  rangeChip: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
+  },
+  rangeChipActive: {
+    backgroundColor: COLORS.primary,
+  },
+  rangeChipText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  rangeChipTextActive: {
+    color: COLORS.textInverse,
+  },
+  scrollContent: {
+    padding: SPACING.lg,
+    gap: SPACING.lg,
+  },
+  loadingContainer: {
+    paddingVertical: 80,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.md,
+  },
+  loadingText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    gap: SPACING.md,
+  },
+  chartCard: {
+    padding: SPACING.lg,
+  },
+  chartHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: SPACING.md,
+  },
+  chartTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
+  },
+  chartSubtitle: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  legendRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
     ...TYPOGRAPHY.caption,
     color: COLORS.textMuted,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 10,
   },
-  metricsGrid: {
-    flexDirection: 'row',
+  chartSvgContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: SPACING.xs,
+  },
+  milestonesCard: {
+    padding: SPACING.lg,
+  },
+  milestoneHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: SPACING.sm,
     marginBottom: SPACING.lg,
   },
-  metricCard: {
-    flex: 1,
-    padding: SPACING.md,
-    alignItems: 'center',
-  },
-  metricVal: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 18,
+  milestoneHeading: {
+    ...TYPOGRAPHY.h3,
     color: COLORS.textPrimary,
-    marginTop: 6,
   },
-  metricLabel: {
+  milestoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+  },
+  milestoneInfo: {
+    flex: 1,
+  },
+  milestoneName: {
+    ...TYPOGRAPHY.bodyLarge,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  milestoneDesc: {
     ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    fontSize: 11,
+    color: COLORS.textSecondary,
     marginTop: 2,
+    lineHeight: 16,
+  },
+  milestoneStatus: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.primary,
+    fontWeight: "700",
+    fontSize: 10,
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
+  milestoneDivider: {
+    height: 1,
+    backgroundColor: COLORS.surfaceBorder,
+    marginVertical: SPACING.md,
   },
 });

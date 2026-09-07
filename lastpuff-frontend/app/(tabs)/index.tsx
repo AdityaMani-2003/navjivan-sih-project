@@ -1,249 +1,151 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
+  Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
-  RefreshControl,
-  Modal,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
-import ConfettiCannon from 'react-native-confetti-cannon';
-
-import { useAuth } from '../../context/AuthContext';
-import { useUser } from '../../context/UserContext';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/theme';
-import GlassCard from '../../components/ui/GlassCard';
-import LiveTimerTicker from '../../components/ui/LiveTimerTicker';
-import ConcentricRings from '../../components/ui/ConcentricRings';
-import QuickActionDock from '../../components/ui/QuickActionDock';
-import Badge from '../../components/ui/Badge';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import * as Linking from "expo-linking";
+import * as Haptics from "expo-haptics";
+import Toast from "react-native-toast-message";
 import {
-  fetchDashboardSummary,
-  fetchAiInsight,
-  earnXPAction,
-} from '../../services/api';
+  AlertCircle,
+  Bell,
+  Check,
+  Cigarette,
+  Dumbbell,
+  Flame,
+  Footprints,
+  Heart,
+  MessageCircle,
+  Phone,
+  Sparkles,
+  Wind,
+  Zap,
+} from "lucide-react-native";
 
-const { width } = Dimensions.get('window');
+import API from "../../services/api";
+import { AuthContext } from "../../context/AuthContext";
+import { UserContext } from "../../context/UserContext";
+import { COLORS, RADIUS, SHADOW, SPACING, TYPOGRAPHY } from "../../constants/theme";
+import Card from "../../components/ui/Card";
+import Button from "../../components/ui/Button";
+import ProgressBar from "../../components/ui/ProgressBar";
+import ProgressRing from "../../components/ui/ProgressRing";
+import StatCard from "../../components/ui/StatCard";
+import EmptyState from "../../components/ui/EmptyState";
+import Skeleton from "../../components/ui/Skeleton";
 
-interface DailyQuest {
-  id: string;
-  title: string;
-  category: string;
-  xp: number;
-  isCompleted: boolean;
-  icon: string;
-}
+const { width } = Dimensions.get("window");
+
+const HEALTH_MILESTONES = [
+  { time: "20 min", title: "Heart Rate", desc: "Pulse normalizes", doneDays: 0 },
+  { time: "8 hr", title: "Carbon Monoxide", desc: "Blood levels halved", doneDays: 0 },
+  { time: "24 hr", title: "Heart Attack Risk", desc: "Risk begins declining", doneDays: 1 },
+  { time: "48 hr", title: "Nerve Endings", desc: "Taste & smell sharpen", doneDays: 2 },
+  { time: "72 hr", title: "Lungs Relax", desc: "Bronchial cilia revive", doneDays: 3 },
+  { time: "2 wks", title: "Circulation", desc: "Walking becomes effortless", doneDays: 14 },
+  { time: "1 mo", title: "Vigor Peak", desc: "Sinus congestion clears", doneDays: 30 },
+];
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { userType, profile } = useUser();
+  const auth = useContext(AuthContext);
+  const userCtx = useContext(UserContext);
 
-  const userName = user?.name || 'Friend';
-  const isSmoker = userType !== 'non-smoker';
+  const isSmoker = auth.userType !== "non-smoker";
+  const userName = auth.user?.name || userCtx.profile?.name || "Friend";
 
-  // Live state
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [streak, setStreak] = useState((profile as any)?.streak || 3);
-  const [userXP, setUserXP] = useState(520);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [aiInsight, setAiInsight] = useState(
-    isSmoker
-      ? 'Your blood oxygenation is 98% restored! Cravings today are purely mental habit loops. Outlast them with 3 deep breaths.'
-      : 'Optimal athletic recovery window active. Ensure 25g post-workout protein and 3L hydration for muscle repair.'
-  );
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>({
+    daysSmokeFree: 1,
+    moneySaved: 180,
+    cigsAvoided: 12,
+    hoursLifeGained: 2,
+    streak: 1,
+    planDurationDays: 30,
+    planName: "Navjivan Protocol",
+  });
+  const [communityPosts, setCommunityPosts] = useState<any[]>([]);
 
-  // Quick Action state
-  const [waterGlasses, setWaterGlasses] = useState(5);
-  const [stepsToday, setStepsToday] = useState(6450);
-  const [cravingsResistedToday, setCravingsResistedToday] = useState(4);
-
-  // Daily AI Missions
-  const [quests, setQuests] = useState<DailyQuest[]>([
-    {
-      id: 'q1',
-      title: isSmoker ? 'Resist 3 PM Chai Craving' : 'Complete 30-Min Cardio Split',
-      category: isSmoker ? 'Recovery' : 'Workout',
-      xp: 50,
-      isCompleted: false,
-      icon: isSmoker ? 'shield-checkmark' : 'barbell',
-    },
-    {
-      id: 'q2',
-      title: 'Walk 7,500 Steps on Padyatra Trail',
-      category: 'Endurance',
-      xp: 40,
-      isCompleted: false,
-      icon: 'footsteps',
-    },
-    {
-      id: 'q3',
-      title: 'Drink 2.5 Liters of Pure Water',
-      category: 'Hydration',
-      xp: 30,
-      isCompleted: true,
-      icon: 'water',
-    },
-  ]);
-
-  const loadData = useCallback(async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
-      const [dashRes, aiRes] = await Promise.allSettled([
-        fetchDashboardSummary(),
-        fetchAiInsight(),
+      setLoading(true);
+
+      const [tasksRes, statsRes, communityRes] = await Promise.all([
+        API.get("/api/v1/tasks/today").catch(() => ({ data: { data: [] } })),
+        API.get("/api/v1/progress/stats").catch(() => ({ data: { data: {} } })),
+        API.get("/api/v1/community/posts?limit=2").catch(() => ({ data: { posts: [] } })),
       ]);
 
-      if (dashRes.status === 'fulfilled' && dashRes.value?.data) {
-        const d = dashRes.value.data;
-        if (d.streak) setStreak(d.streak);
-        if (d.xp) setUserXP(d.xp);
+      if (tasksRes.data?.data) {
+        setTasks(tasksRes.data.data);
       }
-      if (aiRes.status === 'fulfilled' && aiRes.value?.data?.insight) {
-        setAiInsight(aiRes.value.data.insight);
+      if (statsRes.data?.data) {
+        setStats(statsRes.data.data);
       }
-    } catch (_err) {
+      if (communityRes.data?.posts) {
+        setCommunityPosts(communityRes.data.posts.slice(0, 2));
+      }
+    } catch (err) {
+      console.warn("Dashboard load warning:", err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [isSmoker]);
+  }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadData();
+    loadDashboardData();
   };
 
-  const handleToggleQuest = async (questId: string) => {
+  const handleTaskToggle = async (taskId: string, currentStatus: string) => {
+    if (currentStatus === "completed") return;
+
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (_e) {}
+    } catch {}
 
-    setQuests((prev) =>
-      prev.map((q) => {
-        if (q.id === questId) {
-          const nextCompleted = !q.isCompleted;
-          if (nextCompleted) {
-            setUserXP((x) => x + q.xp);
-            setShowConfetti(true);
-            setTimeout(() => setShowConfetti(false), 2500);
-            Toast.show({
-              type: 'success',
-              text1: `Mission Completed! 🎉`,
-              text2: `+${q.xp} XP added to your rank progress.`,
-            });
-            earnXPAction(q.xp, 'quest_completed', { questId });
-          }
-          return { ...q, isCompleted: nextCompleted };
-        }
-        return q;
-      })
+    // Optimistic UI update
+    setTasks((prev) =>
+      prev.map((t) => (t._id === taskId ? { ...t, status: "completed" } : t))
     );
-  };
 
-  const handleAddWater = () => {
-    setWaterGlasses((w) => w + 1);
-    setUserXP((x) => x + 10);
-    earnXPAction(10, 'water_logged');
-  };
-
-  const handleAddSteps = () => {
-    setStepsToday((s) => s + 500);
-    setUserXP((x) => x + 15);
-    earnXPAction(15, 'steps_added');
-  };
-
-  const handleResistCraving = () => {
-    setCravingsResistedToday((c) => c + 1);
-    setUserXP((x) => x + 50);
-    setShowConfetti(true);
-    setTimeout(() => setShowConfetti(false), 2500);
-    earnXPAction(50, 'craving_resisted_dashboard');
-  };
-
-  const handleRegenerateInsight = async () => {
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      setAiInsight('🧠 Consulting Gemini AI Coach...');
-      const res = await fetchAiInsight();
-      if (res?.data?.insight) {
-        setAiInsight(res.data.insight);
-      } else {
-        setAiInsight(
-          isSmoker
-            ? 'Cravings peak at minute 3 and completely dissolve by minute 6. Breathe slowly through pursed lips!'
-            : 'Focus on explosive hip drive today. High-quality reps trump volume every time!'
-        );
-      }
-    } catch (_e) {
-      setAiInsight(
-        isSmoker
-          ? 'Cravings peak at minute 3 and completely dissolve by minute 6. Breathe slowly through pursed lips!'
-          : 'Focus on explosive hip drive today. High-quality reps trump volume every time!'
-      );
+      const res = await API.put(`/api/v1/tasks/${taskId}/complete`);
+      const xpAwarded = res.data?.data?.xpAwarded || 25;
+      userCtx.addXP(xpAwarded);
+
+      Toast.show({
+        type: "success",
+        text1: "🌟 Task Completed!",
+        text2: `+${xpAwarded} XP earned for your dedication.`,
+      });
+    } catch (err) {
+      console.error("Task completion failed:", err);
     }
   };
 
+  const daysSmokeFree = stats?.daysSmokeFree || 1;
+  const progressRatio = Math.min(1, daysSmokeFree / (stats?.planDurationDays || 30));
+
   return (
     <SafeAreaView style={styles.container}>
-      {showConfetti && (
-        <ConfettiCannon
-          count={60}
-          origin={{ x: width / 2, y: 0 }}
-          autoStart={true}
-          fadeOut={true}
-        />
-      )}
-
-      {/* Top App Header */}
-      <View style={styles.topHeader}>
-        <View style={styles.userProfileRow}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarLetter}>{userName.charAt(0).toUpperCase()}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.greetingText} numberOfLines={1}>
-              Namaste, {userName.split(' ')[0]} 👋
-            </Text>
-            <Text style={styles.userRoleTag} numberOfLines={1}>
-              {isSmoker ? 'Smoke-Free Vanguard' : 'Athlete & Fitness Pioneer'}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.headerRightBadges}>
-          {/* Live Streak Pill */}
-          <View style={styles.streakPill}>
-            <Text style={{ fontSize: 13 }}>🔥</Text>
-            <Text style={styles.streakNumber}>{streak}d</Text>
-          </View>
-          {/* XP Pill */}
-          <TouchableOpacity
-            style={styles.xpPill}
-            onPress={() => router.push('/rewards/index' as any)}
-            activeOpacity={0.75}
-          >
-            <FontAwesome5 name="coins" size={12} color={COLORS.accent} />
-            <Text style={styles.xpText}>{userXP}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -252,222 +154,316 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* HERO WIDGET: SMOKER (Live Time & Rupee Ticker) vs NON-SMOKER (Concentric Rings) */}
-        {isSmoker ? (
-          <LiveTimerTicker
-            cigsPerDay={profile?.smokerProfile?.cigarettesPerDay || 12}
-            costPerPack={360}
-          />
-        ) : (
-          <GlassCard style={styles.concentricCard} gradientBorder>
-            <View style={styles.concentricHeader}>
-              <View style={styles.concentricBadge}>
-                <Ionicons name="sparkles" size={14} color={COLORS.secondary} />
-                <Text style={styles.concentricBadgeText}>TODAY'S ATHLETIC RINGS</Text>
-              </View>
-              <Text style={styles.concentricCalories}>520 kcal</Text>
-            </View>
-            <ConcentricRings
-              size={180}
-              ring1Progress={stepsToday / 10000}
-              ring2Progress={0.75}
-              ring3Progress={waterGlasses / 8}
-              ring1Label={`${stepsToday} Steps`}
-              ring2Label="45m Cardio"
-              ring3Label={`${(waterGlasses * 0.25).toFixed(1)}L Hydration`}
-              scoreText="88"
-              scoreSub="PERFORMANCE"
-            />
-          </GlassCard>
-        )}
-
-        {/* FLOATING QUICK-ACTION DOCK */}
-        <QuickActionDock
-          isSmoker={isSmoker}
-          onAddWater={handleAddWater}
-          onAddSteps={handleAddSteps}
-          onResistCraving={handleResistCraving}
-        />
-
-        {/* AI COACH INTELLIGENCE CARD */}
-        <GlassCard style={styles.aiInsightCard} gradientBorder>
-          <View style={styles.aiInsightHeader}>
-            <View style={styles.aiInsightTitleBox}>
-              <View style={[styles.aiIconCircle, { backgroundColor: COLORS.primaryGlow }]}>
-                <MaterialCommunityIcons name="robot" size={18} color={COLORS.primary} />
-              </View>
-              <View>
-                <Text style={styles.aiInsightHeading}>Gemini AI Health Copilot</Text>
-                <Text style={styles.aiInsightSub}>Real-time personalized coaching</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={styles.regenerateBtn}
-              onPress={handleRegenerateInsight}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="refresh" size={14} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.aiInsightBody}>"{aiInsight}"</Text>
-          <TouchableOpacity
-            style={styles.chatPromptBar}
-            onPress={() => router.push('/chatbot' as any)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.chatPromptText}>Ask AI anything about cravings, workouts, diet...</Text>
-            <Ionicons name="arrow-forward" size={14} color={COLORS.primary} />
-          </TouchableOpacity>
-        </GlassCard>
-
-        {/* TODAY'S AI MISSIONS & QUESTS */}
-        <View style={styles.sectionHeaderRow}>
+        {/* 1. HEADER ROW */}
+        <View style={styles.headerRow}>
           <View>
-            <Text style={styles.sectionTitle}>Today's AI Missions</Text>
-            <Text style={styles.sectionSub}>Complete daily quests for XP & brand rewards</Text>
+            <Text style={styles.greetingTitle}>
+              Good {new Date().getHours() < 12 ? "morning" : "afternoon"}, {userName.split(" ")[0]} 👋
+            </Text>
+            <Text style={styles.greetingSubtitle}>
+              {isSmoker
+                ? stats.planName || "30-Day Cessation Journey"
+                : "Daily Wellness & Fitness Lab"}
+            </Text>
           </View>
-          <TouchableOpacity
-            onPress={() => router.push('/goals' as any)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.viewAllText}>View All →</Text>
-          </TouchableOpacity>
+
+          <View style={styles.headerIcons}>
+            <Pressable
+              onPress={() => router.push("/chatbot" as any)}
+              style={styles.chatBotIconBtn}
+              accessibilityRole="button"
+            >
+              <Sparkles size={20} color={COLORS.primary} />
+            </Pressable>
+            <Pressable
+              onPress={() => router.push("/(tabs)/profile" as any)}
+              style={styles.avatarCircle}
+              accessibilityRole="button"
+            >
+              <Text style={styles.avatarText}>
+                {userName.charAt(0).toUpperCase()}
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
-        <View style={styles.questsList}>
-          {quests.map((q) => (
-            <TouchableOpacity
-              key={q.id}
-              activeOpacity={0.85}
-              onPress={() => handleToggleQuest(q.id)}
-            >
-              <GlassCard
-                style={{
-                  ...styles.questCard,
-                  ...(q.isCompleted ? styles.questCardCompleted : {}),
-                }}
-              >
-                <View style={styles.questContentRow}>
-                  <View
-                    style={[
-                      styles.questCheckbox,
-                      q.isCompleted && styles.questCheckboxActive,
-                    ]}
-                  >
-                    {q.isCompleted && (
-                      <Ionicons name="checkmark" size={16} color={COLORS.bg} />
-                    )}
+        {loading && !refreshing ? (
+          <View style={styles.skeletonWrapper}>
+            <Skeleton height={140} borderRadius={RADIUS.lg} style={{ marginBottom: 20 }} />
+            <Skeleton height={200} borderRadius={RADIUS.lg} />
+          </View>
+        ) : (
+          <>
+            {/* 2. HERO CARD */}
+            {isSmoker ? (
+              <Card accent="primary" style={styles.heroCard}>
+                <View style={styles.heroRow}>
+                  {/* Left Column: Days display */}
+                  <View style={styles.heroLeftCol}>
+                    <Text style={styles.heroDayNumber}>{daysSmokeFree}</Text>
+                    <Text style={styles.heroDayLabel}>Days Smoke-Free</Text>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={[
-                        styles.questTitle,
-                        q.isCompleted && styles.questTitleDone,
-                      ]}
-                    >
-                      {q.title}
-                    </Text>
-                    <Text style={styles.questCategory}>{q.category}</Text>
+
+                  {/* Right Column: 3 Mini Stats */}
+                  <View style={styles.heroRightCol}>
+                    <View style={styles.miniStatItem}>
+                      <Text style={[styles.miniStatValue, { color: COLORS.gold }]}>
+                        ₹{stats.moneySaved || 180}
+                      </Text>
+                      <Text style={styles.miniStatLabel}>saved</Text>
+                    </View>
+                    <View style={styles.miniStatItem}>
+                      <Text style={[styles.miniStatValue, { color: COLORS.primary }]}>
+                        {stats.cigsAvoided || 12} cigs
+                      </Text>
+                      <Text style={styles.miniStatLabel}>avoided</Text>
+                    </View>
+                    <View style={styles.miniStatItem}>
+                      <Text style={[styles.miniStatValue, { color: COLORS.success }]}>
+                        +{stats.hoursLifeGained || 2}h
+                      </Text>
+                      <Text style={styles.miniStatLabel}>life gained</Text>
+                    </View>
                   </View>
-                  <Badge
-                    text={`+${q.xp} XP`}
-                    variant={q.isCompleted ? 'success' : 'muted'}
-                    size="sm"
-                  />
                 </View>
-              </GlassCard>
-            </TouchableOpacity>
-          ))}
-        </View>
 
-        {/* SPECIALIZED ROUTE LAUNCHERS */}
-        <View style={styles.featureGrid}>
-          {isSmoker ? (
-            <>
-              <TouchableOpacity
-                style={styles.featureGridCard}
-                onPress={() => router.push('/quit-plan' as any)}
-                activeOpacity={0.8}
-              >
-                <GlassCard style={{ padding: SPACING.md }}>
-                  <View style={[styles.gridIconCircle, { backgroundColor: COLORS.primaryGlow }]}>
-                    <Ionicons name="calendar" size={22} color={COLORS.primary} />
+                {/* Progress bar */}
+                <View style={styles.heroProgressSection}>
+                  <ProgressBar progress={progressRatio} height={6} />
+                  <Text style={styles.heroProgressCaption}>
+                    {daysSmokeFree} of {stats.planDurationDays || 30} days → Next milestone:{" "}
+                    {daysSmokeFree < 7 ? "Week 1 Freedom" : "Monthly Legend"}
+                  </Text>
+                </View>
+              </Card>
+            ) : (
+              <Card accent="secondary" style={styles.heroCard}>
+                <View style={styles.fitnessHeroRow}>
+                  <View style={styles.fitnessHeroLeft}>
+                    <Text style={styles.fitnessWeekKicker}>WEEK 1 ACTIVE</Text>
+                    <Text style={styles.fitnessActiveMins}>45 Mins</Text>
+                    <Text style={styles.fitnessMinsLabel}>Weekly Training Volume</Text>
+                    <Button
+                      title="Today's Workout"
+                      onPress={() => router.push("/fitness-plans" as any)}
+                      variant="secondary"
+                      size="sm"
+                      style={{ marginTop: 12 }}
+                    />
                   </View>
-                  <Text style={styles.gridCardTitle}>30-Day Stepdown Plan</Text>
-                  <Text style={styles.gridCardSub}>Daily cigarette caps & AI milestones</Text>
-                </GlassCard>
-              </TouchableOpacity>
+                  <View style={styles.fitnessHeroRight}>
+                    <ProgressRing size={84} progress={0.65} color={COLORS.secondary}>
+                      <Text style={styles.ringPercentText}>65%</Text>
+                    </ProgressRing>
+                  </View>
+                </View>
+              </Card>
+            )}
 
-              <TouchableOpacity
-                style={styles.featureGridCard}
-                onPress={() => router.push('/disease-risk' as any)}
-                activeOpacity={0.8}
-              >
-                <GlassCard style={{ padding: SPACING.md }}>
-                  <View style={[styles.gridIconCircle, { backgroundColor: 'rgba(239, 68, 68, 0.18)' }]}>
-                    <Ionicons name="heart-half" size={22} color={COLORS.danger} />
-                  </View>
-                  <Text style={styles.gridCardTitle}>Disease Risk Radar</Text>
-                  <Text style={styles.gridCardSub}>Organ recovery & pack-years analysis</Text>
-                </GlassCard>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <TouchableOpacity
-                style={styles.featureGridCard}
-                onPress={() => router.push('/padyatra' as any)}
-                activeOpacity={0.8}
-              >
-                <GlassCard style={{ padding: SPACING.md }}>
-                  <View style={[styles.gridIconCircle, { backgroundColor: COLORS.secondaryGlow }]}>
-                    <FontAwesome5 name="hiking" size={20} color={COLORS.secondary} />
-                  </View>
-                  <Text style={styles.gridCardTitle}>Padyatra Pilgrimage</Text>
-                  <Text style={styles.gridCardSub}>Walk Dandi March & Char Dham</Text>
-                </GlassCard>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.featureGridCard}
-                onPress={() => router.push('/nutrition' as any)}
-                activeOpacity={0.8}
-              >
-                <GlassCard style={{ padding: SPACING.md }}>
-                  <View style={[styles.gridIconCircle, { backgroundColor: 'rgba(14, 165, 233, 0.18)' }]}>
-                    <Ionicons name="nutrition" size={22} color="#38BDF8" />
-                  </View>
-                  <Text style={styles.gridCardTitle}>AI Meal & Macro Scanner</Text>
-                  <Text style={styles.gridCardSub}>Camera photo & calorie analysis</Text>
-                </GlassCard>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-
-        {/* RED 24/7 SOS CRAVING SHIELD BANNER */}
-        {isSmoker && (
-          <TouchableOpacity
-            style={styles.sosBanner}
-            onPress={() => router.push('/sos' as any)}
-            activeOpacity={0.85}
-          >
-            <LinearGradient
-              colors={COLORS.gradientDanger}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.sosBannerGradient}
-            >
-              <View style={styles.sosBannerLeft}>
-                <View style={styles.sosPulsingDot} />
-                <View>
-                  <Text style={styles.sosBannerTitle}>24/7 Emergency Craving Shield</Text>
-                  <Text style={styles.sosBannerSub}>4-7-8 Breathing, Panic Games, Guardian SMS</Text>
+            {/* 3. TODAY'S TASKS SECTION */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>Today's Tasks</Text>
+                <View style={styles.badgePill}>
+                  <Text style={styles.badgePillText}>
+                    {tasks.filter((t) => t.status === "completed").length}/{tasks.length} Done
+                  </Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={22} color="#FFF" />
-            </LinearGradient>
-          </TouchableOpacity>
+
+              {tasks.length === 0 || tasks.every((t) => t.status === "completed") ? (
+                <EmptyState
+                  icon={<Sparkles size={36} color={COLORS.primary} />}
+                  title="All Done For Today!"
+                  description="Outstanding dedication. Your daily neurological and physical recovery is well underway."
+                />
+              ) : (
+                <View style={styles.taskList}>
+                  {tasks.map((task) => {
+                    const isDone = task.status === "completed";
+                    return (
+                      <Pressable
+                        key={task._id}
+                        onPress={() => handleTaskToggle(task._id, task.status)}
+                        style={[styles.taskCard, isDone && styles.taskCardDone]}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: isDone }}
+                      >
+                        <View style={styles.taskIconCircle}>
+                          {task.category === "fitness" ? (
+                            <Dumbbell size={20} color={COLORS.secondary} />
+                          ) : task.category === "mindfulness" ? (
+                            <Wind size={20} color={COLORS.info} />
+                          ) : (
+                            <Flame size={20} color={COLORS.primary} />
+                          )}
+                        </View>
+
+                        <View style={styles.taskTextContainer}>
+                          <Text
+                            style={[
+                              styles.taskTitle,
+                              isDone && styles.taskTitleDone,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {task.title}
+                          </Text>
+                          <Text style={styles.taskDuration}>
+                            {task.duration || 5} mins • +{task.xpReward || 20} XP
+                          </Text>
+                        </View>
+
+                        <View
+                          style={[
+                            styles.checkboxCircle,
+                            isDone && styles.checkboxCircleDone,
+                          ]}
+                        >
+                          {isDone && <Check size={14} color={COLORS.textInverse} />}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+
+            {/* 4. QUICK ACTIONS ROW */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Quick Actions</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.quickActionsScroll}
+              >
+                {/* SOS */}
+                <Pressable
+                  onPress={() => router.push("/sos" as any)}
+                  style={[styles.quickActionCard, { backgroundColor: COLORS.dangerDim }]}
+                  accessibilityRole="button"
+                >
+                  <AlertCircle size={24} color={COLORS.danger} />
+                  <Text style={[styles.quickActionLabel, { color: COLORS.danger }]}>
+                    SOS 🆘
+                  </Text>
+                </Pressable>
+
+                {/* Log Craving */}
+                <Pressable
+                  onPress={() => router.push("/sos" as any)}
+                  style={styles.quickActionCard}
+                  accessibilityRole="button"
+                >
+                  <Flame size={24} color={COLORS.warning} />
+                  <Text style={styles.quickActionLabel}>Log Craving</Text>
+                </Pressable>
+
+                {/* Breathing */}
+                <Pressable
+                  onPress={() => router.push("/games/breathing" as any)}
+                  style={styles.quickActionCard}
+                  accessibilityRole="button"
+                >
+                  <Wind size={24} color={COLORS.info} />
+                  <Text style={styles.quickActionLabel}>Breathing</Text>
+                </Pressable>
+
+                {/* Quitline */}
+                <Pressable
+                  onPress={() => Linking.openURL("tel:1800112356")}
+                  style={styles.quickActionCard}
+                  accessibilityRole="button"
+                >
+                  <Phone size={24} color={COLORS.success} />
+                  <Text style={styles.quickActionLabel}>Quitline</Text>
+                </Pressable>
+              </ScrollView>
+            </View>
+
+            {/* 5. HEALTH TIMELINE */}
+            {isSmoker && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Recovery Timeline</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.timelineScroll}
+                >
+                  {HEALTH_MILESTONES.map((m, idx) => {
+                    const isReached = daysSmokeFree >= m.doneDays;
+                    return (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.timelineCard,
+                          isReached && styles.timelineCardReached,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.timelineTime,
+                            { color: isReached ? COLORS.primary : COLORS.textMuted },
+                          ]}
+                        >
+                          {m.time} {isReached ? "✓" : "○"}
+                        </Text>
+                        <Text style={styles.timelineTitle} numberOfLines={1}>
+                          {m.title}
+                        </Text>
+                        <Text style={styles.timelineDesc} numberOfLines={2}>
+                          {m.desc}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* 6. COMMUNITY PEEK */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>Community Voices</Text>
+                <Pressable onPress={() => router.push("/(tabs)/explore" as any)}>
+                  <Text style={styles.seeAllText}>See All →</Text>
+                </Pressable>
+              </View>
+
+              {communityPosts.length > 0 ? (
+                <View style={styles.postsPeekList}>
+                  {communityPosts.map((post) => (
+                    <Card key={post._id} style={styles.postPeekCard}>
+                      <View style={styles.postPeekHeader}>
+                        <View style={styles.postAuthorCircle}>
+                          <Text style={styles.postAuthorInitial}>
+                            {(post.author?.name || "U").charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.postAuthorDetails}>
+                          <Text style={styles.postAuthorName}>
+                            {post.author?.name || "Pioneer"}
+                          </Text>
+                          <Text style={styles.postUserBadge}>
+                            {post.author?.userType || "Member"}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.postPeekText} numberOfLines={2}>
+                        {post.content || "Taking it one day at a time. The breathwork works!"}
+                      </Text>
+                    </Card>
+                  ))}
+                </View>
+              ) : (
+                <Card style={styles.postPeekCard}>
+                  <Text style={styles.postPeekText}>
+                    Join 12,000+ pioneers breaking free and sharing recovery victories.
+                  </Text>
+                </Card>
+              )}
+            </View>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -479,303 +475,323 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.bg,
   },
-  topHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.xs,
-    paddingBottom: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
   },
-  userProfileRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginRight: SPACING.xs,
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 56,
+    marginBottom: 20,
+  },
+  greetingTitle: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.textPrimary,
+  },
+  greetingSubtitle: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  headerIcons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  chatBotIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.surfaceRaised,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarCircle: {
     width: 40,
     height: 40,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.primaryGlow,
-    borderWidth: 1.5,
+    borderRadius: 20,
+    backgroundColor: COLORS.primaryDim,
+    borderWidth: 1,
     borderColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  avatarLetter: {
+  avatarText: {
+    ...TYPOGRAPHY.label,
     color: COLORS.primary,
-    fontWeight: '900',
-    fontSize: 16,
+    fontWeight: "700",
   },
-  greetingText: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 16,
-    color: COLORS.textPrimary,
+  skeletonWrapper: {
+    paddingVertical: 10,
   },
-  userRoleTag: {
-    ...TYPOGRAPHY.caption,
-    fontSize: 11,
-    color: COLORS.textMuted,
+  heroCard: {
+    marginBottom: 28,
   },
-  headerRightBadges: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs + 2,
+  heroRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
   },
-  streakPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  streakNumber: {
-    color: COLORS.textPrimary,
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  xpPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    paddingHorizontal: SPACING.sm + 2,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
-  },
-  xpText: {
-    color: COLORS.accent,
-    fontWeight: '900',
-    fontSize: 12,
-  },
-  scrollContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
-    paddingBottom: 60,
-  },
-  concentricCard: {
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  concentricHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.xs,
-  },
-  concentricBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  concentricBadgeText: {
-    color: COLORS.secondary,
-    fontWeight: '800',
-    fontSize: 11,
-    letterSpacing: 0.8,
-  },
-  concentricCalories: {
-    color: COLORS.textPrimary,
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  aiInsightCard: {
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  aiInsightHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.sm,
-  },
-  aiInsightTitleBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  aiIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aiInsightHeading: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  aiInsightSub: {
-    ...TYPOGRAPHY.caption,
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  regenerateBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: RADIUS.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aiInsightBody: {
-    ...TYPOGRAPHY.body,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-    fontStyle: 'italic',
-    marginBottom: SPACING.sm + 4,
-  },
-  chatPromptBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: RADIUS.md,
-    paddingVertical: SPACING.xs + 4,
-    paddingHorizontal: SPACING.md,
-  },
-  chatPromptText: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.sm,
-  },
-  sectionTitle: {
-    ...TYPOGRAPHY.heading3,
-    color: COLORS.textPrimary,
-  },
-  sectionSub: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-  },
-  viewAllText: {
-    color: COLORS.primary,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  questsList: {
-    gap: SPACING.xs + 4,
-    marginBottom: SPACING.lg,
-  },
-  questCard: {
-    padding: SPACING.sm + 4,
-    backgroundColor: '#0E0E17',
-  },
-  questCardCompleted: {
-    opacity: 0.6,
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
-  },
-  questContentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm + 2,
-  },
-  questCheckbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: COLORS.textMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  questCheckboxActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  questTitle: {
-    ...TYPOGRAPHY.body,
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
-  questTitleDone: {
-    textDecorationLine: 'line-through',
-    color: COLORS.textMuted,
-  },
-  questCategory: {
-    ...TYPOGRAPHY.caption,
-    fontSize: 10,
-    color: COLORS.textMuted,
-    marginTop: 1,
-  },
-  featureGrid: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.lg,
-  },
-  featureGridCard: {
+  heroLeftCol: {
     flex: 1,
   },
-  gridIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.xs + 2,
+  heroDayNumber: {
+    fontSize: 48,
+    fontWeight: "800",
+    color: COLORS.primary,
+    lineHeight: 52,
   },
-  gridCardTitle: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 13,
+  heroDayLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  heroRightCol: {
+    alignItems: "flex-end",
+    gap: 6,
+  },
+  miniStatItem: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 4,
+  },
+  miniStatValue: {
+    ...TYPOGRAPHY.bodyMedium,
+    fontWeight: "700",
+  },
+  miniStatLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+  },
+  heroProgressSection: {
+    gap: 8,
+  },
+  heroProgressCaption: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    fontSize: 12,
+  },
+  fitnessHeroRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  fitnessHeroLeft: {
+    flex: 1,
+  },
+  fitnessWeekKicker: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.secondaryLight,
+  },
+  fitnessActiveMins: {
+    ...TYPOGRAPHY.display,
+    color: COLORS.textPrimary,
+    fontSize: 36,
+    lineHeight: 44,
+  },
+  fitnessMinsLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+  },
+  fitnessHeroRight: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ringPercentText: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textPrimary,
+    fontWeight: "700",
+  },
+  section: {
+    marginBottom: 28,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
+  },
+  badgePill: {
+    backgroundColor: COLORS.surfaceRaised,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  badgePillText: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textSecondary,
+  },
+  taskList: {
+    gap: 12,
+  },
+  taskCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: "row",
+    alignItems: "center",
+    ...SHADOW.sm,
+  },
+  taskCardDone: {
+    opacity: 0.6,
+  },
+  taskIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.surfaceRaised,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
+  },
+  taskTextContainer: {
+    flex: 1,
+  },
+  taskTitle: {
+    ...TYPOGRAPHY.bodyMedium,
     color: COLORS.textPrimary,
     marginBottom: 2,
   },
-  gridCardSub: {
-    ...TYPOGRAPHY.caption,
-    fontSize: 10,
+  taskTitleDone: {
+    textDecorationLine: "line-through",
     color: COLORS.textMuted,
+  },
+  taskDuration: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+  },
+  checkboxCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: COLORS.borderStrong,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 12,
+  },
+  checkboxCircleDone: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  quickActionsScroll: {
+    gap: 12,
+    paddingVertical: 4,
+  },
+  quickActionCard: {
+    width: 76,
+    height: 76,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 8,
+    ...SHADOW.sm,
+  },
+  quickActionLabel: {
+    ...TYPOGRAPHY.label,
+    fontSize: 11,
+    marginTop: 6,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
+  timelineScroll: {
+    gap: 12,
+    paddingVertical: 4,
+  },
+  timelineCard: {
+    width: 120,
+    height: 96,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 12,
+    justifyContent: "space-between",
+  },
+  timelineCardReached: {
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+  },
+  timelineTime: {
+    ...TYPOGRAPHY.label,
+    fontWeight: "700",
+  },
+  timelineTitle: {
+    ...TYPOGRAPHY.bodyMedium,
+    fontSize: 13,
+    color: COLORS.textPrimary,
+  },
+  timelineDesc: {
+    ...TYPOGRAPHY.caption,
+    fontSize: 11,
+    color: COLORS.textSecondary,
     lineHeight: 14,
   },
-  sosBanner: {
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    marginTop: SPACING.xs,
+  seeAllText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.primaryLight,
+    fontWeight: "600",
   },
-  sosBannerGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.md,
+  postsPeekList: {
+    gap: 12,
   },
-  sosBannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
+  postPeekCard: {
+    padding: 14,
   },
-  sosPulsingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FFF',
+  postPeekHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
   },
-  sosBannerTitle: {
-    color: '#FFF',
-    fontWeight: '800',
+  postAuthorCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.surfaceRaised,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  postAuthorInitial: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textPrimary,
+  },
+  postAuthorDetails: {
+    flex: 1,
+  },
+  postAuthorName: {
+    ...TYPOGRAPHY.bodyMedium,
     fontSize: 14,
+    color: COLORS.textPrimary,
   },
-  sosBannerSub: {
-    color: 'rgba(255, 255, 255, 0.85)',
+  postUserBadge: {
+    ...TYPOGRAPHY.caption,
     fontSize: 11,
-    marginTop: 2,
+    color: COLORS.textSecondary,
+    textTransform: "capitalize",
+  },
+  postPeekText: {
+    ...TYPOGRAPHY.body,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
   },
 });

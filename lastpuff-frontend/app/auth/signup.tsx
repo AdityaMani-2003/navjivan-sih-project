@@ -1,332 +1,357 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import Toast from 'react-native-toast-message';
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { ArrowLeft, Check, Eye, EyeOff, ShieldAlert } from "lucide-react-native";
+import * as Haptics from "expo-haptics";
+import API from "../../services/api";
+import { AuthContext } from "../../context/AuthContext";
+import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from "../../constants/theme";
+import Button from "../../components/ui/Button";
+import StepIndicator from "../../components/ui/StepIndicator";
+import Chip from "../../components/ui/Chip";
 
-import { useAuth } from '../../context/AuthContext';
-import { signup as apiSignup } from '../../services/api';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '../../constants/theme';
-import GlassCard from '../../components/ui/GlassCard';
-import GradientButton from '../../components/ui/GradientButton';
-
-export default function SignupScreen() {
+export default function RegisterScreen() {
   const router = useRouter();
-  const auth = useAuth();
+  const auth = useContext(AuthContext);
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [userType, setUserType] = useState<'smoker' | 'non-smoker'>('smoker');
-  const [age, setAge] = useState('24');
+  const [step, setStep] = useState<1 | 2>(1);
+
+  // Step 1 fields
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  // Step 2 fields
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState<"male" | "female" | "other">("male");
+  const [height, setHeight] = useState("");
+  const [weight, setWeight] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  const onSignup = async () => {
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      setError('Please fill in your name, email, and password.');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleNextStep = () => {
+    if (!name.trim()) {
+      setError("Please enter your full name.");
+      return;
+    }
+    if (!email.trim() || !email.includes("@")) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setError("");
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+    setStep(2);
+  };
+
+  const handleRegister = async () => {
+    if (!agreedToTerms) {
+      setError("You must agree to the Terms of Service and Privacy Policy.");
       return;
     }
 
     try {
       setLoading(true);
-      setError('');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setError("");
 
-      const res = await apiSignup(
-        name.trim(),
-        email.trim().toLowerCase(),
+      const res = await API.post("/api/v1/auth/register", {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
         password,
-        userType,
-        parseInt(age, 10) || 24
-      );
+        age: age ? Number(age) : undefined,
+        gender,
+        height: height ? Number(height) : undefined,
+        weight: weight ? Number(weight) : undefined,
+      });
 
-      if (res?.data?.token && res?.data?.user) {
-        await auth.loginUser(res.data.user, res.data.token);
-        Toast.show({
-          type: 'success',
-          text1: 'Welcome to Navjivan! 🎉',
-          text2: 'Your personalized health protocol has begun.',
-        });
-        router.replace('/(tabs)');
+      if (res?.data?.token) {
+        await auth.loginUser(res.data.user, res.data.token, res.data.refreshToken);
+        router.replace("/onboarding/smoking-status" as any);
       } else {
-        setError('Unexpected server response. Try Quick Demo Mode below.');
+        setError("Account created, but authentication response was invalid.");
       }
     } catch (err: any) {
-      console.error('Signup error:', err);
-      setError(
-        err.response?.data?.message ||
-        err.message ||
-        'Server unreachable. You can still test all features using Quick Demo Mode below!'
-      );
+      console.error("Registration error:", err);
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        "Could not create account. Please try again.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const onDemoLaunch = async (type: 'smoker' | 'non-smoker') => {
-    try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const demoUser = {
-        _id: 'demo_user_123',
-        name: type === 'smoker' ? 'Aditya (Smoke-Free)' : 'Aditya (Athlete)',
-        email: 'demo@navjivan.app',
-        userType: type,
-        streak: 4,
-        xp: 520,
-        smokerProfile: {
-          cigarettesPerDay: 12,
-          yearsSmoking: 4,
-          triggers: ['Morning Chai ☕', 'Work Stress 💻', 'After Meals 🍽️'],
-          quitStrategy: 'gradual',
-          costPerPack: 360,
-          quitDate: new Date(Date.now() - 4 * 86400000).toISOString(),
-        },
-        fitnessProfile: {
-          goal: 'Endurance & Vitality',
-          level: 'intermediate',
-          sport: 'Cricket',
-          workoutDays: ['Mon', 'Wed', 'Fri', 'Sat'],
-        },
-      };
-
-      await auth.loginUser(demoUser, 'demo_jwt_token_sample');
-      router.replace('/(tabs)');
-    } catch (_e) {
-      router.replace('/(tabs)');
-    }
-  };
-
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.flex}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
         >
-          {/* Brand Header */}
-          <View style={styles.brandHeader}>
-            <View style={styles.logoBadge}>
-              <Ionicons name="sparkles" size={24} color={COLORS.primary} />
-            </View>
+          {/* Top Bar with Step Indicator */}
+          <View style={styles.topBar}>
+            {step === 2 ? (
+              <Pressable
+                onPress={() => setStep(1)}
+                style={styles.backBtn}
+                accessibilityRole="button"
+              >
+                <ArrowLeft size={24} color={COLORS.textPrimary} />
+              </Pressable>
+            ) : (
+              <View style={styles.backBtnPlaceholder} />
+            )}
+            <StepIndicator currentStep={step} totalSteps={2} style={styles.stepInd} />
+            <View style={styles.backBtnPlaceholder} />
+          </View>
+
+          {/* Screen Title */}
+          <View style={styles.header}>
             <Text style={styles.title}>
-              Navjivan <Text style={{ color: COLORS.primary }}>×</Text> LastPuff
+              {step === 1 ? "Create Account" : "About You"}
             </Text>
             <Text style={styles.subtitle}>
-              Create your account to unlock AI cessation & athletic telemetry
+              {step === 1
+                ? "Start your personalized wellness transformation"
+                : "Help us calibrate recommendations for your physiology"}
             </Text>
           </View>
 
-          {/* Profile Switcher Tabs */}
-          <View style={styles.profileToggleRow}>
-            <TouchableOpacity
-              style={[
-                styles.profileToggleBtn,
-                userType === 'smoker' && styles.profileToggleBtnActive,
-              ]}
-              onPress={() => {
-                setUserType('smoker');
-                Haptics.selectionAsync();
-              }}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons
-                name="smoke-detector"
-                size={18}
-                color={userType === 'smoker' ? COLORS.primary : COLORS.textMuted}
-              />
-              <Text
-                style={[
-                  styles.profileToggleText,
-                  userType === 'smoker' && styles.profileToggleTextActive,
-                ]}
-              >
-                Quit Smoking
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.profileToggleBtn,
-                userType === 'non-smoker' && styles.profileToggleBtnActiveSecondary,
-              ]}
-              onPress={() => {
-                setUserType('non-smoker');
-                Haptics.selectionAsync();
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name="fitness"
-                size={18}
-                color={userType === 'non-smoker' ? COLORS.secondary : COLORS.textMuted}
-              />
-              <Text
-                style={[
-                  styles.profileToggleText,
-                  userType === 'non-smoker' && { color: COLORS.secondary, fontWeight: '700' },
-                ]}
-              >
-                Fitness & Athlete
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Signup Form Card */}
-          <GlassCard style={styles.card} gradientBorder>
-            <Text style={styles.cardTitle}>Create Your Account</Text>
-
-            {error ? (
-              <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={16} color={COLORS.danger} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
-
-            {/* Name Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>FULL NAME</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="person-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+          {/* Step 1 Form */}
+          {step === 1 && (
+            <View style={styles.form}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Full Name</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g. Aditya Sharma"
+                  placeholder="Aditya Sharma"
                   placeholderTextColor={COLORS.textMuted}
                   value={name}
-                  onChangeText={setName}
+                  onChangeText={(text) => {
+                    setName(text);
+                    if (error) setError("");
+                  }}
                   autoCapitalize="words"
                 />
               </View>
-            </View>
 
-            {/* Email Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>EMAIL ADDRESS</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="mail-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Email Address</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="name@example.com"
+                  placeholder="aditya@example.com"
                   placeholderTextColor={COLORS.textMuted}
                   value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (error) setError("");
+                  }}
                   keyboardType="email-address"
+                  autoCapitalize="none"
                 />
               </View>
-            </View>
 
-            {/* Password Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>PASSWORD</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="lock-closed-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="••••••••"
-                  placeholderTextColor={COLORS.textMuted}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeBtn}
-                >
-                  <Ionicons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={18}
-                    color={COLORS.textMuted}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Password (min 6 characters)</Text>
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    placeholder="Create a strong password"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={password}
+                    onChangeText={(text) => {
+                      setPassword(text);
+                      if (error) setError("");
+                    }}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
                   />
-                </TouchableOpacity>
+                  <Pressable
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeBtn}
+                  >
+                    {showPassword ? (
+                      <EyeOff size={20} color={COLORS.textSecondary} />
+                    ) : (
+                      <Eye size={20} color={COLORS.textSecondary} />
+                    )}
+                  </Pressable>
+                </View>
               </View>
-            </View>
 
-            {/* Age Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>AGE</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="calendar-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Confirm Password</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="24"
+                  placeholder="Re-enter your password"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={confirmPassword}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text);
+                    if (error) setError("");
+                  }}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+              </View>
+
+              {error ? (
+                <View style={styles.errorBanner}>
+                  <ShieldAlert size={20} color={COLORS.danger} style={styles.errorIcon} />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
+
+              <Button
+                title="Continue to Step 2"
+                onPress={handleNextStep}
+                variant="primary"
+                size="lg"
+                style={styles.submitBtn}
+              />
+            </View>
+          )}
+
+          {/* Step 2 Form */}
+          {step === 2 && (
+            <View style={styles.form}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Age</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 26"
                   placeholderTextColor={COLORS.textMuted}
                   value={age}
                   onChangeText={setAge}
-                  keyboardType="numeric"
+                  keyboardType="number-pad"
                 />
               </View>
-            </View>
 
-            {/* Submit Button */}
-            <View style={{ marginTop: SPACING.md }}>
-              <GradientButton
-                title={loading ? 'Creating Account...' : 'Get Started Free →'}
-                colors={COLORS.gradientPrimary}
-                onPress={onSignup}
-                disabled={loading}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Gender</Text>
+                <View style={styles.chipsRow}>
+                  <Chip
+                    label="Male"
+                    selected={gender === "male"}
+                    onPress={() => setGender("male")}
+                  />
+                  <Chip
+                    label="Female"
+                    selected={gender === "female"}
+                    onPress={() => setGender("female")}
+                  />
+                  <Chip
+                    label="Other"
+                    selected={gender === "other"}
+                    onPress={() => setGender("other")}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.rowTwo}>
+                <View style={[styles.inputGroup, styles.halfCol]}>
+                  <Text style={styles.inputLabel}>Height (cm)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="175"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={height}
+                    onChangeText={setHeight}
+                    keyboardType="number-pad"
+                  />
+                </View>
+
+                <View style={[styles.inputGroup, styles.halfCol]}>
+                  <Text style={styles.inputLabel}>Weight (kg)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="70"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={weight}
+                    onChangeText={setWeight}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+
+              {/* Terms Checkbox */}
+              <Pressable
+                style={styles.termsRow}
+                onPress={() => {
+                  try {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  } catch {}
+                  setAgreedToTerms(!agreedToTerms);
+                  if (error) setError("");
+                }}
+                accessibilityRole="checkbox"
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    agreedToTerms && styles.checkboxActive,
+                  ]}
+                >
+                  {agreedToTerms && <Check size={16} color={COLORS.textInverse} />}
+                </View>
+                <Text style={styles.termsText}>
+                  I agree to the Terms of Service and Privacy Policy (required)
+                </Text>
+              </Pressable>
+
+              {error ? (
+                <View style={styles.errorBanner}>
+                  <ShieldAlert size={20} color={COLORS.danger} style={styles.errorIcon} />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
+
+              <Button
+                title={loading ? "Creating Account..." : "Create Account"}
+                onPress={handleRegister}
+                variant="primary"
+                size="lg"
+                loading={loading}
+                disabled={!agreedToTerms}
+                style={styles.submitBtn}
               />
             </View>
+          )}
 
-            {/* Switch to Login */}
-            <TouchableOpacity
-              style={styles.switchRow}
-              onPress={() => router.push('/auth/login')}
-            >
-              <Text style={styles.switchText}>
-                Already have an account?{' '}
-                <Text style={{ color: COLORS.primary, fontWeight: '700' }}>Sign In</Text>
-              </Text>
-            </TouchableOpacity>
-          </GlassCard>
-
-          {/* Quick Demo Mode Card */}
-          <View style={styles.demoSection}>
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR EXPLORE IMMEDIATELY</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <View style={styles.demoGrid}>
-              <TouchableOpacity
-                style={[styles.demoCard, { borderColor: 'rgba(0, 245, 160, 0.4)' }]}
-                onPress={() => onDemoLaunch('smoker')}
-                activeOpacity={0.8}
-              >
-                <MaterialCommunityIcons name="smoke-detector" size={24} color={COLORS.primary} />
-                <Text style={styles.demoTitle}>Launch Smoker Demo</Text>
-                <Text style={styles.demoSub}>Live ticker, 4-7-8 SOS & quit plan</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.demoCard, { borderColor: 'rgba(139, 92, 246, 0.4)' }]}
-                onPress={() => onDemoLaunch('non-smoker')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="barbell" size={24} color={COLORS.secondary} />
-                <Text style={styles.demoTitle}>Launch Athlete Demo</Text>
-                <Text style={styles.demoSub}>Concentric rings, Padyatra & macros</Text>
-              </TouchableOpacity>
-            </View>
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Already have an account? </Text>
+            <Pressable onPress={() => router.push("/auth/login" as any)}>
+              <Text style={styles.loginLink}>Sign In</Text>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -335,190 +360,167 @@ export default function SignupScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: COLORS.bg,
   },
+  flex: {
+    flex: 1,
+  },
   scrollContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.lg,
+    paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 40,
+    minHeight: "100%",
+    justifyContent: "space-between",
   },
-  brandHeader: {
-    alignItems: 'center',
-    marginBottom: SPACING.md,
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
   },
-  logoBadge: {
-    width: 48,
-    height: 48,
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.xs,
+  },
+  backBtnPlaceholder: {
+    width: 44,
+  },
+  stepInd: {
+    marginVertical: 0,
+  },
+  header: {
+    marginBottom: 24,
   },
   title: {
-    ...TYPOGRAPHY.heading1,
-    fontSize: 24,
+    ...TYPOGRAPHY.h1,
     color: COLORS.textPrimary,
+    marginBottom: 6,
   },
   subtitle: {
-    ...TYPOGRAPHY.caption,
+    ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
-    maxWidth: 280,
   },
-  profileToggleRow: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceBorder,
-    borderRadius: RADIUS.lg,
-    padding: 4,
-    marginBottom: SPACING.md,
-    gap: 6,
+  form: {
+    width: "100%",
   },
-  profileToggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: SPACING.sm,
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  input: {
+    height: 52,
+    backgroundColor: COLORS.surfaceRaised,
     borderRadius: RADIUS.md,
-  },
-  profileToggleBtnActive: {
-    backgroundColor: 'rgba(0, 245, 160, 0.15)',
     borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 16,
+    color: COLORS.textPrimary,
+    fontSize: 15,
+  },
+  passwordContainer: {
+    height: 52,
+    backgroundColor: COLORS.surfaceRaised,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  passwordInput: {
+    flex: 1,
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    height: "100%",
+  },
+  eyeBtn: {
+    padding: 8,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  rowTwo: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  halfCol: {
+    flex: 1,
+  },
+  termsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 18,
+    paddingVertical: 4,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: RADIUS.sm,
+    borderWidth: 2,
+    borderColor: COLORS.borderStrong,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  checkboxActive: {
+    backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  profileToggleBtnActiveSecondary: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-    borderWidth: 1,
-    borderColor: COLORS.secondary,
-  },
-  profileToggleText: {
-    fontSize: 12,
-    fontWeight: '600',
+  termsText: {
+    ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
+    flex: 1,
   },
-  profileToggleTextActive: {
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  card: {
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
-  },
-  cardTitle: {
-    ...TYPOGRAPHY.heading3,
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.md,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-    borderWidth: 1,
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.dangerDim,
     borderColor: COLORS.danger,
+    borderWidth: 1,
     borderRadius: RADIUS.md,
-    padding: SPACING.sm,
-    marginBottom: SPACING.md,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorIcon: {
+    marginRight: 10,
   },
   errorText: {
     ...TYPOGRAPHY.caption,
     color: COLORS.danger,
     flex: 1,
   },
-  inputGroup: {
-    marginBottom: SPACING.sm + 2,
+  submitBtn: {
+    marginTop: 8,
+    marginBottom: 16,
   },
-  inputLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: COLORS.textMuted,
-    letterSpacing: 1,
-    marginBottom: 6,
+  footer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
   },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.surfaceBorder,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.sm + 2,
-    height: 48,
-  },
-  inputIcon: {
-    marginRight: SPACING.xs,
-  },
-  input: {
-    flex: 1,
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    height: '100%',
-  },
-  eyeBtn: {
-    padding: SPACING.xs,
-  },
-  switchRow: {
-    alignItems: 'center',
-    marginTop: SPACING.md,
-    paddingVertical: SPACING.xs,
-  },
-  switchText: {
-    fontSize: 13,
+  footerText: {
+    ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
   },
-  demoSection: {
-    marginTop: SPACING.xs,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginVertical: SPACING.sm + 4,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.surfaceBorder,
-  },
-  dividerText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: COLORS.textMuted,
-    letterSpacing: 1,
-  },
-  demoGrid: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  demoCard: {
-    flex: 1,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    alignItems: 'center',
-    gap: 4,
-  },
-  demoTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  demoSub: {
-    fontSize: 10,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    lineHeight: 14,
+  loginLink: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.primary,
+    fontWeight: "700",
   },
 });

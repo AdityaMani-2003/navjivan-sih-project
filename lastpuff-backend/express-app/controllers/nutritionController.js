@@ -1,78 +1,100 @@
 import NutritionLog from "../models/NutritionLog.js";
 import dayjs from "dayjs";
 
-// POST /api/nutrition/log
-export const logMeal = async (req, res) => {
-  try {
-    const userId = req.user?.id || req.user?._id;
-    const { name, mealType, calories, protein, carbs, fat, fiber, imageUrl, time } = req.body;
-    const date = req.body.date || dayjs().format("YYYY-MM-DD");
+function getTodayUtc() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
-    let log = await NutritionLog.findOne({ userId, date });
+export const logMeal = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { name, calories, protein, carbs, fat, fiber, imageUrl, time, waterLitres } = req.body;
+    const today = getTodayUtc();
+
+    let log = await NutritionLog.findOne({ userId, date: today });
     if (!log) {
-      log = await NutritionLog.create({ userId, date, meals: [] });
+      log = await NutritionLog.create({ userId, date: today, meals: [] });
     }
 
-    log.meals.push({ name, mealType, calories, protein, carbs, fat, fiber, imageUrl, time, aiGenerated: !!req.body.aiGenerated });
-    await log.save();
+    if (name) {
+      log.meals.push({
+        name,
+        calories: Number(calories || 0),
+        protein: Number(protein || 0),
+        carbs: Number(carbs || 0),
+        fat: Number(fat || 0),
+        fiber: Number(fiber || 0),
+        time: time || "lunch",
+        imageUrl,
+      });
 
-    return res.status(201).json({ success: true, log });
+      log.totalCalories = log.meals.reduce((acc, m) => acc + (m.calories || 0), 0);
+      log.totalProtein = log.meals.reduce((acc, m) => acc + (m.protein || 0), 0);
+      log.totalCarbs = log.meals.reduce((acc, m) => acc + (m.carbs || 0), 0);
+      log.totalFat = log.meals.reduce((acc, m) => acc + (m.fat || 0), 0);
+    }
+
+    if (waterLitres !== undefined) {
+      log.waterLitres = Number(waterLitres);
+    }
+
+    await log.save();
+    res.status(201).json({ success: true, data: log });
   } catch (err) {
-    console.error("Log meal error:", err);
-    return res.status(500).json({ success: false, message: "Server error logging meal" });
+    next(err);
   }
 };
 
-// GET /api/nutrition/history?days=7
-export const getHistory = async (req, res) => {
+export const getToday = async (req, res, next) => {
   try {
-    const userId = req.user?.id || req.user?._id;
+    const userId = req.user._id;
+    const today = getTodayUtc();
+
+    let log = await NutritionLog.findOne({ userId, date: today }).lean();
+    if (!log) {
+      log = {
+        userId,
+        date: today,
+        meals: [],
+        totalCalories: 0,
+        totalProtein: 0,
+        totalCarbs: 0,
+        totalFat: 0,
+        waterLitres: 0,
+      };
+    }
+
+    res.json({ success: true, data: log });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getHistory = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
     const days = parseInt(req.query.days) || 7;
-    const startDate = dayjs().subtract(days, "day").format("YYYY-MM-DD");
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
 
     const logs = await NutritionLog.find({
       userId,
       date: { $gte: startDate },
-    }).sort({ date: -1 }).lean();
+    })
+      .sort({ date: -1 })
+      .lean();
 
-    return res.status(200).json({ success: true, logs });
+    res.json({ success: true, data: logs });
   } catch (err) {
-    console.error("Nutrition history error:", err);
-    return res.status(500).json({ success: false, message: "Server error" });
+    next(err);
   }
 };
 
-// GET /api/nutrition/summary?date=YYYY-MM-DD
-export const getSummary = async (req, res) => {
-  try {
-    const userId = req.user?.id || req.user?._id;
-    const date = req.query.date || dayjs().format("YYYY-MM-DD");
-
-    const log = await NutritionLog.findOne({ userId, date }).lean();
-
-    const meals = log?.meals || [];
-    const totals = meals.reduce(
-      (acc, m) => ({
-        calories: acc.calories + (m.calories || 0),
-        protein: acc.protein + (m.protein || 0),
-        carbs: acc.carbs + (m.carbs || 0),
-        fat: acc.fat + (m.fat || 0),
-        fiber: acc.fiber + (m.fiber || 0),
-      }),
-      { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
-    );
-
-    return res.status(200).json({
-      success: true,
-      date,
-      mealsCount: meals.length,
-      waterGlasses: log?.waterGlasses || 0,
-      totals,
-      calorieGoal: log?.calorieGoal || 2200,
-      proteinGoal: log?.proteinGoal || 60,
-    });
-  } catch (err) {
-    console.error("Nutrition summary error:", err);
-    return res.status(500).json({ success: false, message: "Server error" });
-  }
+export default {
+  logMeal,
+  getToday,
+  getHistory,
 };

@@ -1,80 +1,93 @@
-import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
-import Svg, { Circle as SvgCircle } from 'react-native-svg';
+import React, { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, View } from 'react-native';
+import Svg, { Circle, G } from 'react-native-svg';
 import { COLORS } from '../../constants/theme';
 
-interface ProgressRingProps {
-  /** Progress from 0 to 1 */
-  progress: number;
-  /** Ring size (width & height) */
-  size?: number;
-  /** Stroke thickness */
-  strokeWidth?: number;
-  /** Progress color */
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+export interface ProgressRingProps {
+  size: number;
+  progress: number; // 0 to 1
   color?: string;
-  /** Track (background) color */
+  strokeWidth?: number;
   trackColor?: string;
-  /** Content to render inside the ring */
+  backgroundColor?: string;
   children?: React.ReactNode;
-  style?: ViewStyle;
+  testID?: string;
 }
 
-export default function ProgressRing({
+export const ProgressRing: React.FC<ProgressRingProps> = ({
+  size,
   progress,
-  size = 80,
-  strokeWidth = 6,
   color = COLORS.primary,
-  trackColor = COLORS.surfaceBorder,
+  strokeWidth = 8,
+  trackColor,
+  backgroundColor,
   children,
-  style,
-}: ProgressRingProps) {
+  testID,
+}) => {
+  const resolvedTrackColor = trackColor || backgroundColor || COLORS.surfaceHigh;
+  const clampedProgress = Math.max(0, Math.min(1, progress || 0));
+  const animatedValue = useRef(new Animated.Value(clampedProgress)).current;
+
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const clampedProgress = Math.min(1, Math.max(0, progress));
-  const strokeDashoffset = circumference * (1 - clampedProgress);
+
+  useEffect(() => {
+    Animated.timing(animatedValue, {
+      toValue: clampedProgress,
+      duration: 800,
+      useNativeDriver: false,
+    }).start();
+  }, [clampedProgress, animatedValue]);
+
+  const strokeDashoffset = animatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [circumference, 0],
+  });
 
   return (
-    <View style={[styles.container, { width: size, height: size }, style]}>
+    <View style={[styles.container, { width: size, height: size }]} testID={testID}>
       <Svg width={size} height={size}>
-        {/* Background track */}
-        <SvgCircle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={trackColor}
-          strokeWidth={strokeWidth}
-          fill="none"
-        />
-        {/* Progress arc */}
-        <SvgCircle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={color}
-          strokeWidth={strokeWidth}
-          fill="none"
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          rotation="-90"
-          origin={`${size / 2}, ${size / 2}`}
-        />
+        <G rotation="-90" origin={`${size / 2}, ${size / 2}`}>
+          {/* Background track circle */}
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={resolvedTrackColor}
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+          {/* Foreground animated progress circle */}
+          <AnimatedCircle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={color}
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${circumference} ${circumference}`}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            fill="none"
+          />
+        </G>
       </Svg>
-      {children && (
-        <View style={styles.childrenContainer}>{children}</View>
-      )}
+      {children && <View style={styles.childContainer}>{children}</View>}
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  childrenContainer: {
+  childContainer: {
     position: 'absolute',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
 });
+
+export default ProgressRing;

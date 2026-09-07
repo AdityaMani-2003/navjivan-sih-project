@@ -1,226 +1,295 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
+  RefreshControl,
   ActivityIndicator,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../constants/theme';
-import GlassCard from '../components/ui/GlassCard';
-import ProgressRing from '../components/ui/ProgressRing';
-import GradientButton from '../components/ui/GradientButton';
-import { fetchRiskAnalysis } from '../services/api';
-import { useUser } from '../context/UserContext';
-import { useAuth } from '../context/AuthContext';
+  Dimensions,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import Toast from "react-native-toast-message";
+import {
+  ShieldAlert,
+  HeartPulse,
+  Activity,
+  AlertTriangle,
+  Info,
+  ArrowLeft,
+  RotateCcw,
+  CheckCircle2,
+  Clock,
+  Sparkles,
+  Flame,
+} from "lucide-react-native";
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOW } from "../constants/theme";
+import Card from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import ProgressBar from "../components/ui/ProgressBar";
+import ProgressRing from "../components/ui/ProgressRing";
+import { useUser } from "../context/UserContext";
+import api from "../services/api";
 
-interface DiseaseMarker {
-  name: string;
-  riskPercent: number;
-  category: 'High' | 'Moderate' | 'Low';
-  icon: string;
-  color: string;
-  reversalYears: number;
+const { width } = Dimensions.get("window");
+
+interface RiskItem {
+  disease: string;
+  risk_percentage: number;
+  severity: "low" | "medium" | "high" | "critical";
+  explanation: string;
 }
+
+const REVERSAL_TIMELINE = [
+  {
+    period: "24 Hours",
+    milestone: "Carbon Monoxide Purge",
+    detail: "Blood oxygen saturation normalizes. Myocardial infarction risk starts trending down.",
+    status: "Achieved",
+  },
+  {
+    period: "1 Year",
+    milestone: "50% Heart Attack Risk Drop",
+    detail: "Excess coronary heart disease risk drops by 50% compared to an active smoker.",
+    status: "Projected",
+  },
+  {
+    period: "5 Years",
+    milestone: "Stroke Risk Normalization",
+    detail: "Cerebrovascular circulation rebounds. Stroke risk matches that of a lifetime non-smoker.",
+    status: "Projected",
+  },
+  {
+    period: "10 Years",
+    milestone: "50% Lung Cancer Reduction",
+    detail: "Risk of dying from lung cancer falls by half. Precancerous tissue progressively self-repairs.",
+    status: "Projected",
+  },
+];
 
 export default function DiseaseRiskScreen() {
   const router = useRouter();
-  const { user } = useAuth();
   const { profile } = useUser();
 
-  const [loading, setLoading] = useState(false);
-  const [aiReport, setAiReport] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [risks, setRisks] = useState<RiskItem[]>([]);
 
-  const cigs = profile?.smokerProfile?.cigarettesPerDay || 12;
-  const years = profile?.smokerProfile?.yearsSmoking || 5;
-  const packYears = ((cigs * years) / 20).toFixed(1);
+  const cigs = profile?.smokerProfile?.cigarettesPerDay || 10;
+  const years = profile?.smokerProfile?.yearsSmoking || 4;
+  const packYears = Math.round(((cigs / 20) * years) * 10) / 10;
 
-  // Compute baseline risk approximations
-  const diseaseMarkers: DiseaseMarker[] = [
-    {
-      name: 'Coronary Heart Disease',
-      riskPercent: Math.min(88, Math.round(25 + cigs * 2.5)),
-      category: 'High',
-      icon: 'heart-pulse',
-      color: COLORS.danger,
-      reversalYears: 1,
-    },
-    {
-      name: 'COPD & Bronchitis',
-      riskPercent: Math.min(92, Math.round(30 + years * 4)),
-      category: 'High',
-      icon: 'lungs',
-      color: '#F97316',
-      reversalYears: 2,
-    },
-    {
-      name: 'Stroke & Vascular Occlusion',
-      riskPercent: Math.min(75, Math.round(18 + cigs * 2)),
-      category: 'Moderate',
-      icon: 'brain',
-      color: '#EAB308',
-      reversalYears: 5,
-    },
-    {
-      name: 'Lung Malignancy Risk',
-      riskPercent: Math.min(85, Math.round(15 + years * 4.5)),
-      category: 'High',
-      icon: 'shield-alert',
-      color: '#EC4899',
-      reversalYears: 10,
-    },
-    {
-      name: 'Peripheral Artery Disease',
-      riskPercent: Math.min(68, Math.round(12 + cigs * 1.8)),
-      category: 'Moderate',
-      icon: 'walk',
-      color: COLORS.secondary,
-      reversalYears: 3,
-    },
-  ];
-
-  const loadAiRisk = async () => {
+  const fetchRiskReport = useCallback(async () => {
     try {
-      setLoading(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const res = await fetchRiskAnalysis({
+      const res = await api.post("/api/v1/ai/disease-risk", {
         cigarettesPerDay: cigs,
         smokingYears: years,
-        age: user?.age || 26,
       });
-      if (res?.data) {
-        setAiReport(res.data);
+
+      if (res.data?.success && Array.isArray(res.data.risks)) {
+        setRisks(res.data.risks);
       }
-    } catch (_err) {
-      setAiReport({
-        summary: `With ${packYears} pack-years of exposure, your vascular endothelium is currently inflamed, but quitting today halts progression immediately. Within 365 days of zero puffs, your risk of sudden myocardial infarction plummets by 50%.`,
-      });
+    } catch (err) {
+      console.warn("Failed to fetch risk report:", err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
+    }
+  }, [cigs, years]);
+
+  useEffect(() => {
+    fetchRiskReport();
+  }, [fetchRiskReport]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchRiskReport();
+  };
+
+  const getSeverityBadgeColor = (severity: string) => {
+    switch (severity?.toLowerCase()) {
+      case "critical":
+      case "high":
+        return { bg: "rgba(239, 68, 68, 0.15)", text: COLORS.danger };
+      case "medium":
+        return { bg: "rgba(245, 158, 11, 0.15)", text: COLORS.warning };
+      case "low":
+      default:
+        return { bg: COLORS.primaryDim, text: COLORS.primary };
     }
   };
 
-  useEffect(() => {
-    loadAiRisk();
-  }, []);
+  const getExposureLevel = (py: number) => {
+    if (py >= 20) return { label: "Severe Exposure", color: COLORS.danger };
+    if (py >= 10) return { label: "Elevated Exposure", color: COLORS.warning };
+    if (py >= 5) return { label: "Moderate Exposure", color: COLORS.secondary };
+    return { label: "Mild Exposure", color: COLORS.primary };
+  };
+
+  const exposure = getExposureLevel(packYears);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>AI Disease Risk Prognosis</Text>
-        <View style={{ width: 40 }} />
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <ArrowLeft size={22} color={COLORS.textPrimary} />
+        </Pressable>
+
+        <View style={styles.headerTitleBox}>
+          <Text style={styles.headerTitle}>Disease Risk Radar</Text>
+          <Text style={styles.headerSubtitle}>Actuarial Clinical Projections</Text>
+        </View>
+
+        <Pressable
+          onPress={onRefresh}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Refresh analysis"
+        >
+          <RotateCcw size={18} color={COLORS.textSecondary} />
+        </Pressable>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.primary}
+          />
+        }
       >
-        {/* Pack-Year Metric Card */}
-        <GlassCard style={styles.heroCard} gradientBorder borderColors={COLORS.gradientDanger}>
-          <View style={styles.heroHeader}>
-            <View>
-              <Text style={styles.heroLabel}>CALCULATED EXPOSURE</Text>
-              <Text style={styles.heroValue}>{packYears} Pack-Years</Text>
-            </View>
-            <View style={styles.warningBadge}>
-              <Text style={styles.warningBadgeText}>⚠️ Elevated Risk</Text>
-            </View>
-          </View>
-          <Text style={styles.heroDesc}>
-            Based on {cigs} cigarettes/day for {years} years. Every smoke-free hour actively reverses cellular damage and resets your cardiovascular trajectory.
+        {/* Medical Disclaimer Banner */}
+        <View style={styles.disclaimerBanner}>
+          <AlertTriangle size={20} color={COLORS.warning} />
+          <Text style={styles.disclaimerText}>
+            Clinical Disclaimer: Actuarial probability model based on CDC and WHO risk tables. Not a
+            clinical diagnosis. Always consult a licensed physician.
           </Text>
-        </GlassCard>
-
-        {/* AI Insight Box */}
-        <Text style={styles.sectionTitle}>Agentic AI Clinical Summary</Text>
-        <GlassCard style={styles.aiBox}>
-          {loading ? (
-            <ActivityIndicator color={COLORS.primary} size="small" />
-          ) : (
-            <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
-              <MaterialCommunityIcons name="stethoscope" size={24} color={COLORS.primary} />
-              <Text style={styles.aiText}>
-                {aiReport?.summary ||
-                  `Endothelial inflammation is elevated at ${packYears} pack-years. Quitting immediately restores arterial elasticity within 12 weeks.`}
-              </Text>
-            </View>
-          )}
-        </GlassCard>
-
-        {/* 5 Disease Markers */}
-        <Text style={styles.sectionTitle}>Organ System Risk Breakdown</Text>
-        <View style={styles.markersGrid}>
-          {diseaseMarkers.map((m) => (
-            <GlassCard key={m.name} style={styles.markerCard}>
-              <View style={styles.markerRow}>
-                <ProgressRing
-                  size={60}
-                  strokeWidth={5}
-                  progress={m.riskPercent / 100}
-                  color={m.color}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.markerName}>{m.name}</Text>
-                  <Text style={styles.markerSub}>
-                    Drops to baseline in <Text style={{ color: COLORS.primary, fontWeight: '700' }}>{m.reversalYears} yrs</Text> smoke-free
-                  </Text>
-                </View>
-                <View style={[styles.riskTag, { backgroundColor: m.color + '22', borderColor: m.color }]}>
-                  <Text style={[styles.riskTagText, { color: m.color }]}>{m.riskPercent}%</Text>
-                </View>
-              </View>
-            </GlassCard>
-          ))}
         </View>
 
-        {/* Reversal Timeline */}
-        <Text style={styles.sectionTitle}>Health Reversal Milestones</Text>
-        <GlassCard style={styles.timelineCard}>
-          <View style={styles.timelineItem}>
-            <Ionicons name="time" size={20} color={COLORS.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.timelineTitle}>1 Year Smoke-Free</Text>
-              <Text style={styles.timelineDesc}>Coronary heart disease risk drops by 50% compared to a continuing smoker.</Text>
+        {/* Pack-Year Exposure Hero Card */}
+        <Card style={styles.heroCard} elevation="medium">
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroTag}>
+              <ShieldAlert size={14} color={exposure.color} />
+              <Text style={[styles.heroTagText, { color: exposure.color }]}>
+                {exposure.label}
+              </Text>
             </View>
+            <Text style={styles.packYearNum}>{packYears} Pack-Years</Text>
           </View>
 
-          <View style={styles.timelineDivider} />
+          <Text style={styles.heroTitle}>Cumulative Tobacco Exposure</Text>
+          <Text style={styles.heroDesc}>
+            Calculated as ({cigs} cigarettes/day ÷ 20) × {years} active smoking years. Higher
+            pack-year numbers directly correlate with cellular mutagenic stress.
+          </Text>
 
-          <View style={styles.timelineItem}>
-            <Ionicons name="shield-checkmark" size={20} color={COLORS.secondary} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.timelineTitle}>5 Years Smoke-Free</Text>
-              <Text style={styles.timelineDesc}>Stroke risk drops to equal that of a lifetime non-smoker.</Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statBoxValue}>{cigs}</Text>
+              <Text style={styles.statBoxLabel}>Cigs Per Day</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
+              <Text style={styles.statBoxValue}>{years} yrs</Text>
+              <Text style={styles.statBoxLabel}>Smoking Years</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
+              <Text style={[styles.statBoxValue, { color: exposure.color }]}>
+                {packYears}
+              </Text>
+              <Text style={styles.statBoxLabel}>Exposure Score</Text>
             </View>
           </View>
+        </Card>
 
-          <View style={styles.timelineDivider} />
-
-          <View style={styles.timelineItem}>
-            <Ionicons name="trophy" size={20} color={COLORS.success} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.timelineTitle}>10 Years Smoke-Free</Text>
-              <Text style={styles.timelineDesc}>Lung cancer mortality cut by over half. Precancerous cells replaced by healthy tissue.</Text>
-            </View>
+        {/* Gemini AI Risk Analysis Cards */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Activity size={18} color={COLORS.primary} />
+            <Text style={styles.sectionTitle}>Gemini AI Risk Probabilities</Text>
           </View>
-        </GlassCard>
 
-        {/* Action Button */}
-        <GradientButton
-          title="Back to Quit Plan 🚀"
-          onPress={() => router.push('/quit-plan' as any)}
-          colors={COLORS.gradientPrimary}
-          style={{ marginTop: SPACING.md }}
-        />
+          {loading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={styles.loadingText}>Synthesizing actuarial risk matrix...</Text>
+            </View>
+          ) : (
+            <View style={styles.riskList}>
+              {risks.map((item, idx) => {
+                const badge = getSeverityBadgeColor(item.severity);
+                return (
+                  <Card key={idx} style={styles.riskCard} elevation="low">
+                    <View style={styles.riskTopRow}>
+                      <View style={styles.riskTitleBox}>
+                        <Text style={styles.riskDisease}>{item.disease}</Text>
+                        <View style={[styles.severityPill, { backgroundColor: badge.bg }]}>
+                          <Text style={[styles.severityPillText, { color: badge.text }]}>
+                            {item.severity?.toUpperCase()} SEVERITY
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text style={[styles.riskPercent, { color: badge.text }]}>
+                        {item.risk_percentage}%
+                      </Text>
+                    </View>
+
+                    <ProgressBar
+                      progress={Math.min(1, item.risk_percentage / 100)}
+                      color={badge.text}
+                      height={6}
+                      style={{ marginVertical: SPACING.sm }}
+                    />
+
+                    <Text style={styles.riskExplanation}>{item.explanation}</Text>
+                  </Card>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* Organ Recovery Reversal Radar */}
+        <Card style={styles.reversalCard} elevation="medium">
+          <View style={styles.reversalHeader}>
+            <HeartPulse size={20} color={COLORS.primary} />
+            <Text style={styles.reversalTitle}>Organ Risk Reversal Timeline</Text>
+          </View>
+          <Text style={styles.reversalDesc}>
+            What happens to your biometrics once you sustain complete cessation:
+          </Text>
+
+          <View style={styles.timelineList}>
+            {REVERSAL_TIMELINE.map((item, idx) => (
+              <View key={idx} style={styles.timelineItem}>
+                <View style={styles.timelinePeriodBox}>
+                  <Text style={styles.timelinePeriod}>{item.period}</Text>
+                </View>
+
+                <View style={styles.timelineInfo}>
+                  <Text style={styles.timelineMilestone}>{item.milestone}</Text>
+                  <Text style={styles.timelineDetail}>{item.detail}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -229,145 +298,242 @@ export default function DiseaseRiskScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.background,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.surfaceBorder,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    ...TYPOGRAPHY.heading3,
-    color: COLORS.textPrimary,
-  },
-  scrollContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    paddingBottom: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderSubtle,
+    backgroundColor: COLORS.surface,
   },
-  heroCard: {
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceElevated,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
   },
-  heroHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: SPACING.xs,
+  headerTitleBox: {
+    alignItems: "center",
   },
-  heroLabel: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.danger,
-  },
-  heroValue: {
-    ...TYPOGRAPHY.heading2,
+  headerTitle: {
+    ...TYPOGRAPHY.h3,
     color: COLORS.textPrimary,
+  },
+  headerSubtitle: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
     marginTop: 2,
   },
-  warningBadge: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    borderWidth: 1,
-    borderColor: COLORS.danger,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 3,
-    borderRadius: RADIUS.full,
+  scrollContent: {
+    padding: SPACING.lg,
+    gap: SPACING.lg,
   },
-  warningBadgeText: {
-    color: COLORS.danger,
-    fontSize: 11,
-    fontWeight: '700',
+  disclaimerBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: SPACING.sm,
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.3)",
+  },
+  disclaimerText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.warning,
+    flex: 1,
+    lineHeight: 18,
+  },
+  heroCard: {
+    padding: SPACING.lg,
+  },
+  heroTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.sm,
+  },
+  heroTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceElevated,
+  },
+  heroTagText: {
+    ...TYPOGRAPHY.caption,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  packYearNum: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    fontWeight: "600",
+  },
+  heroTitle: {
+    ...TYPOGRAPHY.h2,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.xs,
   },
   heroDesc: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+    marginBottom: SPACING.lg,
+  },
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+  },
+  statBox: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statBoxValue: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
+  },
+  statBoxLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    marginTop: 2,
+    fontSize: 11,
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: COLORS.surfaceBorder,
+  },
+  sectionContainer: {
+    gap: SPACING.md,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  sectionTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
+  },
+  loadingBox: {
+    paddingVertical: 60,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.md,
+  },
+  loadingText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+  },
+  riskList: {
+    gap: SPACING.sm,
+  },
+  riskCard: {
+    padding: SPACING.md,
+  },
+  riskTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  riskTitleBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  riskDisease: {
+    ...TYPOGRAPHY.bodyLarge,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  severityPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+  },
+  severityPillText: {
+    ...TYPOGRAPHY.caption,
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  riskPercent: {
+    ...TYPOGRAPHY.h3,
+    fontWeight: "800",
+  },
+  riskExplanation: {
     ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
     lineHeight: 18,
     marginTop: 4,
   },
-  sectionTitle: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 16,
-    color: COLORS.textPrimary,
-    marginTop: SPACING.md,
-    marginBottom: SPACING.xs,
+  reversalCard: {
+    padding: SPACING.lg,
   },
-  aiBox: {
-    padding: SPACING.md,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.primary,
-    marginBottom: SPACING.sm,
+  reversalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    marginBottom: 4,
   },
-  aiText: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textPrimary,
-    lineHeight: 20,
-    flex: 1,
-  },
-  markersGrid: {
-    gap: SPACING.xs + 2,
-  },
-  markerCard: {
-    padding: SPACING.md,
-  },
-  markerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  markerName: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 14,
+  reversalTitle: {
+    ...TYPOGRAPHY.h3,
     color: COLORS.textPrimary,
   },
-  markerSub: {
+  reversalDesc: {
     ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
-    fontSize: 11,
-    marginTop: 2,
+    marginBottom: SPACING.lg,
   },
-  riskTag: {
-    borderWidth: 1,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-  },
-  riskTagText: {
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  timelineCard: {
-    padding: SPACING.md,
+  timelineList: {
+    gap: SPACING.md,
   },
   timelineItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACING.sm,
+    flexDirection: "row",
+    gap: SPACING.md,
+    alignItems: "flex-start",
   },
-  timelineTitle: {
-    ...TYPOGRAPHY.heading3,
-    fontSize: 14,
+  timelinePeriodBox: {
+    width: 75,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.surfaceElevated,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+  },
+  timelinePeriod: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.primary,
+    fontWeight: "700",
+    fontSize: 11,
+  },
+  timelineInfo: {
+    flex: 1,
+  },
+  timelineMilestone: {
+    ...TYPOGRAPHY.body,
+    fontWeight: "700",
     color: COLORS.textPrimary,
   },
-  timelineDesc: {
+  timelineDetail: {
     ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
     marginTop: 2,
     lineHeight: 16,
-  },
-  timelineDivider: {
-    height: 1,
-    backgroundColor: COLORS.surfaceBorder,
-    marginVertical: SPACING.md,
   },
 });
